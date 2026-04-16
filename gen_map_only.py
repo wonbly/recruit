@@ -7,7 +7,6 @@ import hashlib
 import json
 from geopy.geocoders import ArcGIS
 import folium
-from folium.plugins import Search
 
 D1 = "d.csv"
 D2 = "c.csv"
@@ -37,37 +36,30 @@ def f_encrypt(data, pw):
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
-    print("Building premium map from existing data...")
+    print("Building sidebar-integrated map...")
     df['c4'] = df['c4'].fillna('')
     v_df = df[df['c4'].str.len() > 5].copy()
     
-    # Store markers info for JS search
     search_data = []
-    
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
-    fg = folium.FeatureGroup(name="Data").add_to(m)
     
     for i, (_, r) in enumerate(v_df.iterrows()):
         a = str(r["c4"])
         co = g.get(a)
         if co:
-            t = r["c2"]
-            cor = r["c1"]
+            t = r["c2"]; cor = r["c1"]
             col = 'blue' if any(kw in str(t) for kw in ['마케팅', '마케터']) else 'red'
             h = f"""
             <div style="font-family: 'Noto Sans KR', sans-serif; padding: 10px; min-width: 200px;">
                 <h4 style="margin: 0 0 5px 0; color: #1a73e8;">{cor}</h4>
                 <p style="margin: 0 0 10px 0; font-size: 0.9rem; color: #333;">{t}</p>
-                <div style="font-size: 0.85rem; color: #666; line-height: 1.6;">
-                    💰 {r["c5"]}<br>
-                    📍 {a}
-                </div>
+                <div style="font-size: 0.85rem; color: #666; line-height: 1.6;">💰 {r["c5"]}<br>📍 {a}</div>
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
                 <a href="{r["c3"]}" target="_blank" style="text-decoration: none; color: white; background: #1a73e8; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 0.8rem;">공고 보기</a>
-            </div>
-            """
-            marker = folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(fg)
-            search_data.append({"n": cor, "t": t, "l": co})
+            </div>"""
+            # Add marker with a specific class for searching if possible, or handle via JS
+            marker = folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(m)
+            search_data.append({"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]})
             
     tmp = m._repr_html_()
     enc = f_encrypt(tmp, P1)
@@ -77,135 +69,131 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Project | Premium Map</title>
+    <title>Recruit Project | Sidebar & List</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        :root {{ --primary: #1a73e8; --bg: #f8f9fa; --card: #ffffff; }}
-        body {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; background: var(--bg); margin: 0; overflow: hidden; height: 100vh; }}
+        :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #ffffff; --border: #e8eaed; }}
+        body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; background: var(--bg); }}
         
-        /* Login UI */
+        /* Login Screen */
         #login-screen {{ 
-            display: flex; justify-content: center; align-items: center; 
-            height: 100vh; width: 100%; position: fixed; z-index: 1000;
-            background: var(--bg); transition: 0.5s;
+            position: fixed; inset: 0; background: var(--bg); z-index: 2000;
+            display: flex; justify-content: center; align-items: center; transition: 0.5s;
         }}
         .login-card {{ 
-            background: var(--card); padding: 3rem; border-radius: 16px; 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08); text-align: center; 
-            max-width: 400px; width: 85%; transform: translateY(-20px);
+            background: white; padding: 3rem; border-radius: 20px; text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.05); max-width: 400px; width: 90%;
         }}
-        .login-card h2 {{ font-weight: 600; color: #202124; margin-bottom: 0.5rem; }}
-        .login-card p {{ color: #5f6368; font-size: 0.95rem; margin-bottom: 2rem; }}
-        .input-group {{ margin-bottom: 1.5rem; position: relative; }}
         input[type="password"] {{ 
-            width: 100%; padding: 14px; border: 1px solid #dadce0; border-radius: 8px;
-            font-size: 1.1rem; box-sizing: border-box; text-align: center;
-            transition: 0.3s; font-family: sans-serif;
+            width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px;
+            margin: 20px 0; text-align: center; font-size: 1.1rem;
         }}
-        input[type="password"]:focus {{ outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }}
         .btn-unlock {{ 
-            background: var(--primary); color: white; border: none; padding: 14px 40px;
-            border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem;
-            width: 100%; transition: 0.3s;
+            width: 100%; background: var(--primary); color: white; border: none; padding: 14px;
+            border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;
         }}
-        .btn-unlock:hover {{ background: #1557b0; box-shadow: 0 4px 12px rgba(26,115,232,0.3); }}
-        #error-msg {{ color: #d93025; font-size: 0.85rem; margin-top: 12px; height: 20px; }}
 
-        /* Map UI */
-        #map-container {{ display: none; width: 100%; height: 100vh; position: relative; }}
+        /* Main Layout */
+        #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
         
-        /* Floating Search Bar */
-        .search-box-wrapper {{
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 999; width: 90%; max-width: 600px;
+        /* Sidebar */
+        #sidebar {{ 
+            width: 380px; min-width: 380px; background: var(--sidebar-bg);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
+            z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.03); 
         }}
-        .search-inner {{ 
-            background: white; border-radius: 28px; display: flex; align-items: center;
-            padding: 8px 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.02);
-            transition: 0.3s;
-        }}
-        .search-inner:focus-within {{ box-shadow: 0 4px 12px rgba(0,0,0,0.25); }}
-        .search-icon {{ color: #5f6368; margin-right: 12px; }}
+        .sidebar-header {{ padding: 20px; border-bottom: 1px solid var(--border); }}
+        .sidebar-header h1 {{ font-size: 1.2rem; margin: 0 0 15px 0; color: var(--primary); display: flex; align-items: center; gap: 8px; }}
+        
+        .search-container {{ position: relative; }}
         #search-input {{ 
-            border: none; outline: none; width: 100%; font-size: 1.1rem;
-            padding: 8px 0; font-family: 'Noto Sans KR', sans-serif;
+            width: 100%; padding: 12px 40px 12px 15px; border-radius: 24px;
+            border: 1px solid var(--border); background: #f1f3f4; outline: none;
+            font-size: 1rem; box-sizing: border-box; transition: 0.2s;
         }}
-        
-        /* Search Suggestions */
-        .suggestions {{
-            position: absolute; top: 60px; left: 0; right: 0;
-            background: white; border-radius: 12px; overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 300px; overflow-y: auto;
-            display: none;
-        }}
-        .suggestion-item {{ 
-            padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #eee;
-            transition: 0.2s; display: flex; flex-direction: column;
-        }}
-        .suggestion-item:hover {{ background: #f1f3f4; }}
-        .suggestion-item .name {{ font-weight: 500; color: #202124; }}
-        .suggestion-item .title {{ font-size: 0.8rem; color: #70757a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        #search-input:focus {{ background: white; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,115,232,0.1); }}
+        .search-icon-fixed {{ position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: #70757a; }}
 
-        /* Custom Popup Style */
-        .leaflet-popup-content-wrapper {{ border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }}
+        .stats-bar {{ padding: 10px 20px; font-size: 0.85rem; color: #70757a; background: #fafafa; border-bottom: 1px solid var(--border); }}
+
+        #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
+        .job-card {{ 
+            padding: 16px; border-radius: 12px; border: 1px solid transparent;
+            cursor: pointer; transition: 0.2s; margin-bottom: 8px;
+        }}
+        .job-card:hover {{ background: #f8f9fa; border-color: var(--border); }}
+        .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
+        .job-card .corp {{ font-size: 0.85rem; font-weight: 600; color: #5f6368; }}
+        .job-card .title {{ font-size: 1rem; font-weight: 600; color: #202124; margin: 4px 0; line-height: 1.4; }}
+        .job-card .info {{ font-size: 0.85rem; color: #70757a; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }}
+        .job-card .salary {{ color: #1e8e3e; font-weight: 500; }}
+
+        /* Map Area */
+        #map-area {{ flex-grow: 1; position: relative; }}
+        
+        /* Responsive */
+        @media (max-width: 768px) {{
+            #sidebar {{ width: 100%; position: absolute; height: 40%; bottom: 0; left: 0; border-right: none; border-top: 1px solid var(--border); }}
+            #main-layout {{ flex-direction: column; }}
+            #map-area {{ height: 60%; }}
+        }}
     </style>
 </head>
 <body>
     <div id="login-screen">
         <div class="login-card">
-            <div style="font-size: 2.5rem; margin-bottom: 1rem;">📍</div>
-            <h2>JOB MAP ACCESS</h2>
-            <p>프로젝트 지도를 보려면 비밀번호를 입력하세요.</p>
-            <div class="input-group">
-                <input type="password" id="pw" placeholder="비밀번호 입력" autofocus>
-                <div id="error-msg"></div>
-            </div>
-            <button class="btn-unlock" onclick="unlock()">지도 열기</button>
+            <div style="font-size: 3rem; margin-bottom: 1rem;">💼</div>
+            <h2 style="margin:0;">RECRUIT MAP</h2>
+            <p style="color:#666; font-size:0.9rem;">프라이빗 채용 지도를 확인하려면 비밀번호를 입력하세요.</p>
+            <input type="password" id="pw" placeholder="Password" autofocus>
+            <button class="btn-unlock" onclick="unlock()">시작하기</button>
+            <div id="err" style="color:#d93025; margin-top:15px; font-size:0.85rem;"></div>
         </div>
     </div>
 
-    <div id="map-container">
-        <div class="search-box-wrapper">
-            <div class="search-inner">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="search-input" placeholder="회사명 또는 공고 키워드 검색..." oninput="handleSearch(this.value)">
-                <span id="search-clear" style="cursor:pointer; display:none;" onclick="clearSearch()">✕</span>
+    <div id="main-layout" style="display:none;">
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <h1><span>📍</span> Recruit Explorer</h1>
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="회사명, 직무 키워드 검색..." oninput="filterJobs(this.value)">
+                    <span class="search-icon-fixed">🔍</span>
+                </div>
             </div>
-            <div class="suggestions" id="suggestions"></div>
+            <div class="stats-bar">검색 결과: <span id="count">0</span>건</div>
+            <div id="job-list"></div>
         </div>
-        <div id="content" style="width:100%; height:100%;"></div>
+        <div id="map-area">
+            <div id="content" style="width:100%; height:100%;"></div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
         const encryptedData = "{enc}";
-        const markers = {s_json};
+        const markersData = {s_json};
         let leafletMap = null;
 
         async function unlock() {{
             const pw = document.getElementById('pw').value;
-            const err = document.getElementById('error-msg');
+            const err = document.getElementById('err');
             try {{
                 const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
                 const key = [];
-                for (let i = 0; i < hash.length; i += 2) {{
-                    key.push(parseInt(hash.substr(i, 2), 16));
-                }}
+                for (let i=0; i<hash.length; i+=2) key.push(parseInt(hash.substr(i, 2), 16));
                 
                 const raw = atob(encryptedData);
                 const res = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) {{
-                    res[i] = raw.charCodeAt(i) ^ key[i % key.length];
-                }}
+                for (let i=0; i<raw.length; i++) res[i] = raw.charCodeAt(i) ^ key[i % key.length];
                 
                 const decoded = new TextDecoder().decode(res);
                 if (decoded.includes('folium')) {{
                     document.getElementById('login-screen').style.opacity = '0';
                     setTimeout(() => {{
                         document.getElementById('login-screen').style.display = 'none';
-                        document.getElementById('map-container').style.display = 'block';
+                        document.getElementById('main-layout').style.display = 'flex';
                         const container = document.getElementById('content');
                         container.innerHTML = decoded;
                         
@@ -217,83 +205,82 @@ def f_map(df, g):
                             document.body.appendChild(ns);
                         }}
                         
-                        // Find the leaflet map object more robustly
-                        let attempts = 0;
-                        const findMap = setInterval(() => {{
-                            attempts++;
-                            for (let key in window) {{
-                                if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{
-                                    leafletMap = window[key];
-                                    console.log("Map found:", key);
-                                    clearInterval(findMap);
-                                    break;
-                                }}
-                            }}
-                            if (attempts > 20) clearInterval(findMap);
-                        }}, 500);
+                        initMapObject();
+                        renderList(markersData);
                     }}, 500);
-                }} else {{
-                    err.innerText = "비밀번호가 올바르지 않습니다.";
-                }}
-            }} catch (e) {{
-                err.innerText = "비밀번호 오류가 발생했습니다.";
-            }}
+                }} else {{ err.innerText = "비밀번호가 틀렸습니다."; }}
+            }} catch (e) {{ err.innerText = "오류가 발생했습니다."; }}
         }}
 
-        function handleSearch(val) {{
-            const list = document.getElementById('suggestions');
-            const clear = document.getElementById('search-clear');
-            if (!val) {{
-                list.style.display = 'none';
-                clear.style.display = 'none';
-                return;
-            }}
-            clear.style.display = 'block';
-            const filtered = markers.filter(m => m.n.includes(val) || m.t.includes(val)).slice(0, 10);
-            if (filtered.length > 0) {{
-                list.innerHTML = filtered.map(m => `
-                    <div class="suggestion-item" onclick="goToMarker(${{m.l[0]}}, ${{m.l[1]}}, '${{m.n}}')">
-                        <span class="name">${{m.n}}</span>
-                        <span class="title">${{m.t}}</span>
-                    </div>
-                `).join('');
-                list.style.display = 'block';
-            }} else {{
-                list.style.display = 'none';
-            }}
-        }}
-
-        function clearSearch() {{
-            document.getElementById('search-input').value = '';
-            handleSearch('');
-        }}
-
-        function goToMarker(lat, lon, name) {{
-            console.log("Navigating to:", name, lat, lon);
-            if (!leafletMap) {{
+        function initMapObject() {{
+            let attempts = 0;
+            const findMap = setInterval(() => {{
+                attempts++;
                 for (let key in window) {{
                     if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{
                         leafletMap = window[key];
+                        clearInterval(findMap);
                         break;
                     }}
                 }}
+                if (attempts > 20) clearInterval(findMap);
+            }}, 500);
+        }}
+
+        function renderList(list) {{
+            const container = document.getElementById('job-list');
+            document.getElementById('count').innerText = list.length;
+            container.innerHTML = list.map((j, idx) => `
+                <div class="job-card" onclick="focusJob(${{j.l[0]}}, ${{j.l[1]}}, '${{j.n}}', this)">
+                    <div class="corp">${{j.n}}</div>
+                    <div class="title">${{j.t}}</div>
+                    <div class="info">
+                        <span class="salary">💰 ${{j.s || '정보없음'}}</span>
+                        <span>📍 ${{j.a.split(' ').slice(0,2).join(' ')}}</span>
+                    </div>
+                </div>
+            `).join('');
+        }}
+
+        function filterJobs(val) {{
+            const filtered = markersData.filter(m => 
+                m.n.toLowerCase().includes(val.toLowerCase()) || 
+                m.t.toLowerCase().includes(val.toLowerCase()) ||
+                m.a.toLowerCase().includes(val.toLowerCase())
+            );
+            renderList(filtered);
+            
+            // Optional: Hide/Show markers on map
+            if (leafletMap) {{
+                leafletMap.eachLayer(layer => {{
+                    if (layer instanceof L.Marker) {{
+                        const name = layer.options.name || layer.options.title || "";
+                        const tooltip = layer.getTooltip() ? layer.getTooltip().getContent() : "";
+                        const match = filtered.some(f => f.n === name || f.n === tooltip);
+                        if (match) layer.addTo(leafletMap);
+                        else leafletMap.removeLayer(layer);
+                    }
+                }});
             }}
-            if (!leafletMap) {{
-                alert("지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
-                return;
-            }}
-            document.getElementById('suggestions').style.display = 'none';
+        }}
+
+        function focusJob(lat, lon, name, el) {{
+            if (!leafletMap) return;
+            
+            // Active state
+            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+
             leafletMap.flyTo([lat, lon], 15, {{ duration: 1.5 }});
             
-            // Find marker in Leaflet's layers to open popup
             setTimeout(() => {{
-                leafletMap.eachLayer(function(layer) {{
-                    if (layer instanceof L.Marker || (layer.options && layer.options.icon)) {{
-                        const ll = layer.getLatLng ? layer.getLatLng() : null;
-                        if (ll && Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lon) < 0.001) {{
+                leafletMap.eachLayer(layer => {{
+                    if (layer instanceof L.Marker) {{
+                        const ll = layer.getLatLng();
+                        if (Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lon) < 0.001) {{
                             layer.openPopup();
                         }}
-                    }}
+                    }
                 }});
             }}, 1600);
         }}
@@ -305,7 +292,7 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Premium UX Created at {O1}")
+    print(f"Done! Sidebar Integration Created at {O1}")
 
 if __name__ == "__main__":
     d, g = f_ld()
