@@ -102,9 +102,11 @@ def f_encrypt(data, pw):
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"Rebuilding Map Engine (Leaflet Core) - {now}...")
-    df['c4'] = df['c4'].fillna('')
+    # DEDUPLICATE: Prioritize entries with address information
     if 'id' in df.columns:
-        df = df.drop_duplicates(subset=['id'], keep='first')
+        df['al'] = df['c4'].astype(str).apply(len)
+        df = df.sort_values(by='al', ascending=False)
+        df = df.drop_duplicates(subset=['id'], keep='first').drop(columns=['al'])
     
     clean_data = []
     for _, r in df.iterrows():

@@ -4,6 +4,7 @@ import re
 import hashlib
 import base64
 import json
+from geopy.geocoders import ArcGIS
 from datetime import datetime
 
 # [Config]
@@ -46,14 +47,29 @@ def f_build():
     print(f"Rebuilding with Final Leaflet Engine - {now}...")
     
     # 1. Prepare clean data for the frontend
-    df['c4'] = df['c4'].fillna('')
+    # DEDUPLICATE: Prioritize entries with address information
     if 'id' in df.columns:
-        df = df.drop_duplicates(subset=['id'], keep='first')
+        df['al'] = df['c4'].astype(str).apply(len)
+        df = df.sort_values(by='al', ascending=False)
+        df = df.drop_duplicates(subset=['id'], keep='first').drop(columns=['al'])
     
     clean_data = []
+    geocoder = ArcGIS(timeout=10)
     for _, r in df.iterrows():
         adr = str(r["c4"])
         coords = g_cache.get(adr)
+        
+        if adr and not coords:
+            # Attempt to geocode missing address
+            try:
+                cl = re.sub(r'\(.*?\)', '', adr)
+                cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
+                loc = geocoder.geocode(cl)
+                if loc:
+                    coords = (loc.latitude, loc.longitude)
+                    g_cache[adr] = coords # Update cache
+            except: pass
+            
         clean_data.append({
             "id": str(r.get("id", "")),
             "corp": str(r["c1"]),
