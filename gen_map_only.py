@@ -259,7 +259,7 @@ def f_map(df, g):
                         const match = filtered.some(f => f.n === name || f.n === tooltip);
                         if (match) layer.addTo(leafletMap);
                         else leafletMap.removeLayer(layer);
-                    }
+                    }}
                 }});
             }}
         }}
@@ -277,10 +277,10 @@ def f_map(df, g):
                 leafletMap.eachLayer(layer => {{
                     if (layer instanceof L.Marker) {{
                         const ll = layer.getLatLng();
-                        if (Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lon) < 0.001) {{
+                        if (ll && Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lon) < 0.001) {{
                             layer.openPopup();
                         }}
-                    }
+                    }}
                 }});
             }}, 1600);
         }}

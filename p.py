@@ -156,7 +156,7 @@ def f_map(df, g):
                 <a href="{r["c3"]}" target="_blank" style="text-decoration: none; color: white; background: #1a73e8; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 0.8rem;">공고 보기</a>
             </div>'''
             folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(m)
-            search_data.append({"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]})
+            search_data.append({{"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]}})
 
     f_save_g(g)
     tmp = m._repr_html_()
@@ -236,10 +236,13 @@ def f_map(df, g):
             }}
         }}
         function focusJob(lat, lon, name, el) {{
+            if (!leafletMap) {{
+                for (let key in window) {{ if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{ leafletMap = window[key]; break; }} }}
+            }}
             if (!leafletMap) return;
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
             leafletMap.flyTo([lat, lon], 15);
-            setTimeout(() => {{ leafletMap.eachLayer(layer => {{ if (layer instanceof L.Marker) {{ const ll = layer.getLatLng(); if (Math.abs(ll.lat-lat)<0.001) layer.openPopup(); }} }}); }}, 1600);
+            setTimeout(() => {{ leafletMap.eachLayer(layer => {{ if (layer.getLatLng) {{ const ll = layer.getLatLng(); if (Math.abs(ll.lat-lat)<0.001) layer.openPopup(); }} }}); }}, 1600);
         }}
     </script>
 </body>
