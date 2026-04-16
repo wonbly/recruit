@@ -8,6 +8,7 @@ import hashlib
 from playwright.async_api import async_playwright
 from geopy.geocoders import ArcGIS
 import folium
+from datetime import datetime
 
 # [System Config]
 C1 = "https://www.saramin.co.kr/zf_user/search?loc_cd=102250%2C102230%2C102240%2C102260%2C102220&cat_mcls=16%2C14&company_cd=0%2C1%2C2%2C3%2C4%2C5%2C6%2C7%2C9%2C10&search_optional_item=y&search_done=y&panel_count=y&recruitPageCount=40&recruitSort=reg_dt"
@@ -101,7 +102,8 @@ def f_encrypt(data, pw):
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
-    print("Building final map (Fixed)...")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Building sidebar map (Fixed) - {now}...")
     df['c4'] = df['c4'].fillna('')
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
@@ -151,7 +153,12 @@ def f_map(df, g):
 </head>
 <body>
     <div id="login" style="position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;justify-content:center;align-items:center;">
-        <div style="background:white;padding:3rem;border-radius:20px;text-align:center;"><h2>RECRUIT MAP</h2><input type="password" id="pw" placeholder="PASSWORD" style="width:100%;padding:10px;margin:20px 0;"><button style="width:100%;background:var(--primary);color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button></div>
+        <div style="background:white;padding:3rem;border-radius:20px;text-align:center;">
+            <h2>RECRUIT MAP</h2>
+            <input type="password" id="pw" placeholder="PASSWORD" style="width:100%;padding:10px;margin:20px 0;">
+            <button style="width:100%;background:var(--primary);color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
+            <div style="margin-top: 25px; font-size: 0.75rem; color: #aaa;">최근 업데이트: {now}</div>
+        </div>
     </div>
     <div id="main-layout" style="display:none;">
         <div id="sidebar">

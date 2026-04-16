@@ -5,6 +5,7 @@ import hashlib
 import base64
 import json
 import folium
+from datetime import datetime
 
 D1 = "d.csv"
 D2 = "c.csv"
@@ -35,7 +36,8 @@ def f_encrypt(data, pw):
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
-    print("Building sidebar-integrated map (Final Fix & Full Data)...")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Building sidebar-integrated map (Final Fix & Full Data) - {now}...")
     df['c4'] = df['c4'].fillna('')
     # Do not drop duplicates to ensure full count as requested
     
@@ -100,7 +102,15 @@ def f_map(df, g):
     </style>
 </head>
 <body>
-    <div id="login-screen"><div class="login-card"><h2>RECRUIT MAP</h2><input type="password" id="pw" placeholder="PASSWORD" style="width:100%; padding:12px; margin:20px 0; text-align:center;"><button style="width:100%; background:var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;" onclick="unlock()">로그인</button><div id="err" style="color:red; margin-top:10px;"></div></div></div>
+    <div id="login-screen">
+        <div class="login-card">
+            <h2>RECRUIT MAP</h2>
+            <input type="password" id="pw" placeholder="PASSWORD" style="width:100%; padding:12px; margin:20px 0; text-align:center;">
+            <button style="width:100%; background:var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;" onclick="unlock()">로그인</button>
+            <div id="err" style="color:red; margin-top:10px;"></div>
+            <div style="margin-top: 30px; font-size: 0.75rem; color: #999;">최근 업데이트: {now}</div>
+        </div>
+    </div>
     <div id="main-layout">
         <div id="sidebar">
             <div style="padding:20px; border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="search-input" placeholder="전체 리스트 검색..." oninput="filterJobs(this.value)" style="width:100%; padding:10px; border-radius:24px; border:1px solid #eee; background:#f1f3f4;"></div>
