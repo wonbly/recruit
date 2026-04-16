@@ -1,3 +1,4 @@
+import pd_as_pd # Placeholder to avoid conflict if needed, but I'll use standard names
 import pandas as pd
 import os
 import re
@@ -7,15 +8,14 @@ import json
 import hashlib
 from playwright.async_api import async_playwright
 from geopy.geocoders import ArcGIS
-import folium
 from datetime import datetime
 
-# [System Config] - Category List Version (1,000+ jobs)
+# [System Config] - NEW Category List Version (1,000+ jobs)
 C1 = "https://www.saramin.co.kr/zf_user/jobs/list/job-category?cat_mcls=16%2C14&loc_cd=102230%2C102240%2C102250%2C102260%2C102220%2C102520%2C102530%2C102540%2C102550%2C102510%2C102390&recruitSort=reg_dt"
 D1 = "d.csv"
 D2 = "c.csv"
 O1 = "index.html"
-W1 = 5 # Parallel threads
+W1 = 8 # Parallel threads for faster 1,000-job processing
 P1 = "250222"
 
 def f_idx(u):
@@ -45,48 +45,46 @@ def f_ld():
     return d, g
 
 async def f_list(p, s_ids):
-    print("Scanning list...")
+    print("🚀 Scanning NEW Category List (Regex Mode)...")
     nj = []
-    # Scan up to 12 pages for 1,000+ items (80-100 per page)
+    # Scan up to 12 pages for 1,000+ items
     for i in range(1, 13):
         u = f"{C1}&recruitPage={i}&recruitPageCount=100"
+        print(f"Page {i}/12...")
         try:
             await p.goto(u, timeout=30000, wait_until="load")
-            await p.wait_for_selector('.item', timeout=5000)
-        except: break
-        
-        items = await p.query_selector_all('.item')
-        for it in items:
-            try:
-                # New selectors for job-category page
-                j_el = await it.query_selector('.job_tit a')
-                if not j_el: continue
-                l = await j_el.get_attribute('href')
-                if not l.startswith('http'): l = 'https://www.saramin.co.kr' + l
-                jid = f_idx(l)
+            await asyncio.sleep(2) # Stabilize
+            html = await p.content()
+            
+            # Hybrid Regex Extraction: More robust than selectors for this messy page
+            # Find all item blocks or markers
+            # Pattern: rec_idx=([0-9]+) and nearby info
+            items = re.findall(r'id="grand_link_([0-9]+)".*?class="corp_name".*?>(.*?)</a>.*?class="job_tit".*?>(.*?)</a>.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
+            
+            # Fallback for standard list items if grand_link fails
+            if not items:
+                items = re.findall(r'rec_idx=([0-9]+).*?class="corp_name".*?>(.*?)</a>.*?class="job_tit".*?>(.*?)</a>.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
+            
+            found_count = 0
+            for jid, cor, tit, loc in items:
+                jid = str(jid)
                 if jid in s_ids: continue
+                # Clean HTML tags
+                cor = re.sub(r'<[^>]+>', '', cor).strip()
+                tit = re.sub(r'<[^>]+>', '', tit).strip()
+                loc = re.sub(r'<[^>]+>', '', loc).strip()
                 
-                cor_el = await it.query_selector('.corp_name a')
-                cor = (await cor_el.inner_text()).strip() if cor_el else "Unknown"
-                tit = (await j_el.inner_text()).strip()
-                
-                # Location/Condition info
-                conds = await it.query_selector_all('.job_condition span')
-                loc_txt = ""
-                if conds: loc_txt = (await conds[0].inner_text()).strip()
-                
-                sal_txt = ""
-                if len(conds) > 1: sal_txt = (await conds[1].inner_text()).strip()
-                
-                nj.append({
-                    "c1": cor, "c2": tit, "c3": l, "id": jid, 
-                    "c4": loc_txt, "c5": sal_txt
-                })
-            except: continue
+                l = f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={jid}"
+                nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc})
+                s_ids.add(jid)
+                found_count += 1
+            print(f"Found {found_count} new items on page {i}.")
+        except: continue
     return nj
 
 async def f_deep(jobs):
-    print(f"Deep scanning {len(jobs)} items...")
+    if not jobs: return []
+    print(f"📡 Deep scanning {len(jobs)} items with {W1} workers...")
     res = []
     async with async_playwright() as p:
         b = await p.chromium.launch(headless=True)
@@ -96,7 +94,6 @@ async def f_deep(jobs):
             for j in sub_list:
                 try:
                     await page.goto(j["c3"], timeout=30000, wait_until="load")
-                    await asyncio.sleep(1)
                     data = await page.evaluate('''() => {
                         let e = document.querySelector('.address .txt_adr') || document.querySelector('.jw_address') || document.querySelector('address');
                         let a = e ? e.innerText : "";
@@ -104,7 +101,8 @@ async def f_deep(jobs):
                         for(let d of document.querySelectorAll('dt')) if(d.innerText.includes('급여')) s = d.nextElementSibling ? d.nextElementSibling.innerText : "";
                         return { "a": a, "s": s };
                     }''')
-                    j["c4"] = data["a"].strip(); j["c5"] = data["s"].strip(); j["c6"] = f_sal(j["c5"]); res.append(j)
+                    if data["a"]: j["c4"] = data["a"].strip() # Prioritize building address if found
+                    j["c5"] = data["s"].strip(); j["c6"] = f_sal(j["c5"]); res.append(j)
                 except: continue
             await ctx.close()
         ch = (len(jobs) // W1) + 1
@@ -121,9 +119,8 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Final Robust Build - {now}...")
+    print(f"Building Premium Map - {now}...")
     df['c4'] = df['c4'].fillna('')
-    # DEDUPLICATE: Prioritize entries with address
     if 'id' in df.columns:
         df['al'] = df['c4'].str.len()
         df = df.sort_values(by='al', ascending=False)
@@ -133,19 +130,13 @@ def f_map(df, g):
     geocoder = ArcGIS(timeout=10)
     for _, r in df.iterrows():
         adr = str(r["c4"]); coords = g.get(adr)
-        if adr and adr != 'nan' and not coords:
+        if adr and len(adr) > 3 and adr != 'nan' and not coords:
             try:
-                # Optimized cleaning for ArcGIS
-                cl = re.sub(r'\(.*?\)', '', adr)
-                cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
-                if not cl: continue
+                cl = re.sub(r'\(.*?\)', '', adr); cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
+                if len(cl) < 3: continue
                 loc = geocoder.geocode(cl)
-                if loc: 
-                    coords = (loc.latitude, loc.longitude)
-                    g[adr] = coords
-                    print(f"New Loc: {cl} -> {coords}")
+                if loc: coords = (loc.latitude, loc.longitude); g[adr] = coords
             except: pass
-        
         clean_data.append({
             "id": str(r.get("id", "")), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
             "loc": coords if coords else None, "sal": str(r.get("c5", "")), "adr": adr
@@ -157,7 +148,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Pure Engine</title>
+    <title>Recruit Map | 1,000 Jobs</title>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -178,10 +169,11 @@ def f_map(df, g):
 <body>
     <div id="login-screen">
         <div style="background:white;padding:3rem;border-radius:24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.1);width:350px;">
-            <h2>RECRUIT MAP</h2>
+            <h2>RECRUIT MAP 1,000</h2>
             <input type="password" id="pw-input" placeholder="PASSWORD" style="width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin:20px 0;text-align:center;">
             <button onclick="handleLogin()" style="width:100%;background:var(--primary);color:white;padding:14px;border:none;border-radius:12px;cursor:pointer;font-weight:600;">LOG IN</button>
             <div id="login-err" style="color:red;margin-top:10px;"></div>
+            <div style="margin-top:20px; font-size:11px; color:#999;">LAST UPDATE: {now}</div>
         </div>
     </div>
     <div id="main-layout">
@@ -222,7 +214,7 @@ def f_map(df, g):
         function renderItems(list) {{
             const listEl = document.getElementById('job-list');
             document.getElementById('job-count').innerText = list.length;
-            listEl.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob('${{j.id}}', ${{j.loc ? j.loc[0] : 'null'}}, ${{j.loc ? j.loc[1] : 'null'}}, this)"><div class="corp">${{j.corp}}</div><div class="title">${{j.title}}</div></div>`).join('');
+            listEl.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob('${{j.id}}', ${{j.loc ? j.loc[0] : 'null'}}, ${{j.loc ? j.loc[1] : 'null'}}, this)"><div class="corp">${{j.corp}}</div><div class="title" style="font-size:14px;color:var(--primary);">${{j.title}}</div></div>`).join('');
         }}
         function handleSearch(val) {{
             const v = val.toLowerCase(); const filtered = allJobs.filter(j => j.corp.toLowerCase().includes(v) || j.title.toLowerCase().includes(v));
@@ -241,15 +233,26 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Success: p.py synced at {O1}")
+    print(f"Success: High-capacity Map generated at {O1}")
 
 async def main():
-    d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())
+    # RESET DB as requested for the 1,000 new jobs
+    print("🧹 Cleaning database for fresh 1,000-job scrape...")
+    d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
+    d.to_csv(D1, index=False, encoding='utf-8-sig')
+    
+    _, g = f_ld(); s_ids = set()
     async with async_playwright() as p:
         b = await p.chromium.launch(headless=True); ctx = await b.new_context(user_agent="Mozilla/5.0")
         pg = await ctx.new_page(); nj = await f_list(pg, s_ids); await b.close()
     if nj:
+        print(f"✅ Found {len(nj)} unique jobs. Starting detailed scan...")
         sc = await f_deep(nj); d = pd.concat([d, pd.DataFrame(sc)], ignore_index=True); d.to_csv(D1, index=False, encoding='utf-8-sig')
-    f_map(d, g)
+    
+    # Reload and build map with coordinates
+    d_final, g_final = f_ld()
+    f_map(d_final, g_final)
+    # Save coordinate cache
+    pd.DataFrame([{'a':k, 'lat':v[0], 'lon':v[1]} for k,v in g_final.items()]).to_csv(D2, index=False, encoding='utf-8-sig')
 
 if __name__ == "__main__": asyncio.run(main())
