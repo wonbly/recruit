@@ -84,14 +84,6 @@ async def f_deep(jobs):
                         let a = "", s = "";
                         let e = document.querySelector('.address .txt_adr') || document.querySelector('.jw_address') || document.querySelector('address');
                         if(e) a = e.innerText;
-                        if(!a) {
-                            for(let d of document.querySelectorAll('dt')) {
-                                if(d.innerText.match(/근무지|위치|주소/)) {
-                                    a = d.nextElementSibling ? d.nextElementSibling.innerText : "";
-                                    break;
-                                }
-                            }
-                        }
                         for(let d of document.querySelectorAll('dt')) {
                             if(d.innerText.includes('급여')) {
                                 s = d.nextElementSibling ? d.nextElementSibling.innerText : "";
@@ -125,17 +117,17 @@ def f_encrypt(data, pw):
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
-    print("Building sidebar map...")
+    print("Building sidebar map (Bug Fixed)...")
     df['c4'] = df['c4'].fillna('')
-    v_df = df[df['c4'].str.len() > 5].copy()
+    df = df.drop_duplicates(subset=['id'], keep='first')
     search_data = []
 
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
 
-    for i, (_, r) in enumerate(v_df.iterrows()):
+    for i, (_, r) in enumerate(df.iterrows()):
         a = str(r["c4"])
-        if a not in g:
+        if a and a not in g:
             try:
                 cl = re.sub(r'\(.*?\)', '', a)
                 cl = re.sub(r'\d+층|\d+호|[A-Za-z]동', '', cl).split(',')[0].strip()
@@ -144,8 +136,9 @@ def f_map(df, g):
                 else: g[a] = None
             except: pass
         co = g.get(a)
+        t = r["c2"]; cor = r["c1"]
+        search_data.append({{"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]}})
         if co:
-            t = r["c2"]; cor = r["c1"]
             col = 'blue' if any(kw in str(t) for kw in ['마케팅', '마케터']) else 'red'
             h = f'''
             <div style="font-family: 'Noto Sans KR', sans-serif; padding: 10px; min-width: 200px;">
@@ -156,7 +149,6 @@ def f_map(df, g):
                 <a href="{r["c3"]}" target="_blank" style="text-decoration: none; color: white; background: #1a73e8; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 0.8rem;">공고 보기</a>
             </div>'''
             folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(m)
-            search_data.append({{"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]}})
 
     f_save_g(g)
     tmp = m._repr_html_()
@@ -167,7 +159,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Sidebar</title>
+    <title>Recruit Map | Fixed</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -177,22 +169,20 @@ def f_map(df, g):
         #login-screen {{ position: fixed; inset: 0; background: var(--bg); z-index: 2000; display:flex; justify-content:center; align-items:center; }}
         .login-card {{ background: white; padding: 3rem; border-radius: 20px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }}
         #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
-        #sidebar {{ width: 380px; min-width: 380px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
-        .sidebar-header {{ padding: 20px; border-bottom: 1px solid var(--border); }}
-        .search-container {{ position: relative; }}
-        #search-input {{ width: 100%; padding: 12px 15px; border-radius: 24px; border: 1px solid var(--border); background: #f1f3f4; outline: none; box-sizing: border-box; }}
+        #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; transition: 0.15s; border: 1px solid transparent; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
     </style>
 </head>
 <body>
-    <div id="login-screen"><div class="login-card"><h2>RECRUIT MAP</h2><p>비밀번호를 입력하세요.</p><input type="password" id="pw" placeholder="Password"><button style="width:100%; background:var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;" onclick="unlock()">지도 열기</button><div id="err" style="color:red; margin-top:10px;"></div></div></div>
+    <div id="login-screen"><div class="login-card"><h2>RECRUIT MAP</h2><input type="password" id="pw" placeholder="Password" style="width:100%; padding:10px; margin:20px 0;"><button style="width:100%; color:white; background:var(--primary); padding:10px; border:none; border-radius:8px;" onclick="unlock()">지도 열기</button></div></div>
     <div id="main-layout">
         <div id="sidebar">
-            <div class="sidebar-header"><h1>📍 Recruit</h1><div class="search-container"><input type="text" id="search-input" placeholder="검색..." oninput="filterJobs(this.value)"></div></div>
+            <div style="padding:20px; border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="search-input" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%; padding:10px; border-radius:24px; border:1px solid #eee; background:#f1f3f4;"></div>
+            <div style="padding:10px 20px; font-size:0.8rem; color:#666;">건수: <span id="count">0</span></div>
             <div id="job-list"></div>
         </div>
         <div id="map-area"><div id="content" style="width:100%; height:100%;"></div></div>
@@ -210,39 +200,40 @@ def f_map(df, g):
             if (decoded.includes('folium')) {{
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
-                const container = document.getElementById('content'); container.innerHTML = decoded;
-                const scripts = container.getElementsByTagName('script');
+                document.getElementById('content').innerHTML = decoded;
+                const scripts = document.getElementById('content').getElementsByTagName('script');
                 for (let s of scripts) {{ const ns = document.createElement('script'); if (s.src) ns.src = s.src; else ns.textContent = s.textContent; document.body.appendChild(ns); }}
                 initMapObject(); renderList(markersData);
-            }} else {{ document.getElementById('err').innerText = "Wrong Password"; }}
+            }} else {{ alert("Wrong Password"); }}
         }}
         function initMapObject() {{
-            let attempts = 0;
             const findMap = setInterval(() => {{
-                attempts++;
                 for (let key in window) {{ if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{ leafletMap = window[key]; clearInterval(findMap); break; }} }}
-                if (attempts > 20) clearInterval(findMap);
             }}, 500);
+            setTimeout(() => clearInterval(findMap), 10000);
         }}
         function renderList(list) {{
             const container = document.getElementById('job-list');
-            container.innerHTML = list.map((j, idx) => `<div class="job-card" onclick="focusJob(${{j.l[0]}}, ${{j.l[1]}}, '${{j.n}}', this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
+            document.getElementById('count').innerText = list.length;
+            container.innerHTML = list.map((j, idx) => `
+                <div class="job-card" onclick="focusJob(${{j.l ? j.l[0] : 'null'}}, ${{j.l ? j.l[1] : 'null'}}, '${{j.n.replace(/'/g, "\\'")}}', this)">
+                    <b>${{j.n}}</b><br><small>${{j.t}}</small>
+                    ${{!j.l ? '<br><small style="color:red">[지도위치없음]</small>' : ''}}
+                </div>
+            `).join('');
         }}
-        function filterJobs(val) {{
-            const filtered = markersData.filter(m => m.n.toLowerCase().includes(val.toLowerCase()) || m.t.toLowerCase().includes(val.toLowerCase()));
+        function filterJobs(v) {{
+            const filtered = markersData.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (leafletMap) {{
-                leafletMap.eachLayer(layer => {{ if (layer instanceof L.Marker) {{ const match = filtered.some(f => f.n === (layer.options.name || layer.options.title)); if (match) layer.addTo(leafletMap); else leafletMap.removeLayer(layer); }} }});
+                leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(leafletMap); else leafletMap.removeLayer(l); }} }});
             }}
         }}
         function focusJob(lat, lon, name, el) {{
-            if (!leafletMap) {{
-                for (let key in window) {{ if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{ leafletMap = window[key]; break; }} }}
-            }}
-            if (!leafletMap) return;
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
+            if (lat === null || !leafletMap) return;
             leafletMap.flyTo([lat, lon], 15);
-            setTimeout(() => {{ leafletMap.eachLayer(layer => {{ if (layer.getLatLng) {{ const ll = layer.getLatLng(); if (Math.abs(ll.lat-lat)<0.001) layer.openPopup(); }} }}); }}, 1600);
+            setTimeout(() => {{ leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
         }}
     </script>
 </body>
@@ -250,7 +241,7 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Sidebar Created at {O1}")
+    print(f"Done! Updated p.py at {O1}")
 
 async def main():
     d, g = f_ld()
