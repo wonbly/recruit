@@ -62,7 +62,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Ultimate Fix V2</title>
+    <title>Recruit Map | Surgery Fix</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -73,7 +73,7 @@ def f_map(df, g):
         #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
         #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: 0.15s; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: 0.1s; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
@@ -104,7 +104,6 @@ def f_map(df, g):
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
         const ed = "{enc}"; const md = {s_json}; window.leafletMap = null;
-        
         async function unlock() {{
             const pw = document.getElementById('pw').value;
             const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
@@ -119,85 +118,54 @@ def f_map(df, g):
                 
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
-                
-                const allS = Array.from(container.getElementsByTagName('script'));
-                const extS = allS.filter(s => s.src);
-                const inlS = allS.filter(s => !s.src);
+                const scripts = Array.from(container.getElementsByTagName('script'));
+                const ext = scripts.filter(s => s.src);
+                const inl = scripts.filter(s => !s.src);
 
-                for (let s of extS) {{
+                for (let s of ext) {{
                     await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
                 }}
-
-                for (let s of inlS) {{
+                for (let s of inl) {{
                     const ns = document.createElement('script');
                     let code = s.textContent;
-                    // SURGERY: Force global assignment even in closures
-                    // Folium usually does: var map_xxxx = L.map(...)
-                    // We replace it with: window.leafletMap = window.map_xxxx = L.map(...)
                     code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
                     ns.textContent = code;
                     document.body.appendChild(ns);
                 }}
-
-                setTimeout(() => {{
-                    if (window.leafletMap) {{
-                        console.log("SURGERY SUCCESS: Map captured.");
-                        window.leafletMap.invalidateSize();
-                    }}
-                    document.getElementById('loader').style.display = 'none';
-                    renderList(md);
-                }}, 500);
-            }} else {{ document.getElementById('err').innerText = "Wrong Password"; }}
+                setTimeout(() => {{ if(window.leafletMap) window.leafletMap.invalidateSize(); renderList(md); }}, 300);
+            }} else {{ alert("Wrong Password"); }}
         }}
-
         function renderList(list) {{
             const container = document.getElementById('job-list');
             document.getElementById('count').innerText = list.length;
-            container.innerHTML = list.map((j, idx) => `
-                <div class="job-card" onclick="focusJob(${{j.l ? j.l[0] : 'null'}}, ${{j.l ? j.l[1] : 'null'}}, this)">
+            container.innerHTML = list.map(j => `
+                <div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},this)">
                     <div style="font-size:0.85rem; font-weight:600; color:#5f6368;">${{j.n}}</div>
                     <div style="font-size:0.95rem; font-weight:500; margin:4px 0;">${{j.t}}</div>
                     <div style="font-size:0.8rem; color:#999;">💰 ${{j.s || '-'}}</div>
                 </div>
             `).join('');
-        }
-
-        function filterJobs(val) {{
-            const v = val.toLowerCase();
-            const filtered = md.filter(m => m.n.toLowerCase().includes(v) || m.t.toLowerCase().includes(v));
+        }}
+        function filterJobs(v) {{
+            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (window.leafletMap) {{
-                window.leafletMap.eachLayer(layer => {{
-                    if (layer instanceof L.Marker) {{
-                        const match = filtered.some(f => f.n === (layer.options.name || layer.options.title));
-                        if (match) layer.addTo(window.leafletMap); else window.leafletMap.removeLayer(layer);
-                    }}
-                }});
+                window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
             }}
-        }
-
-        function focusJob(lat, lon, el) {{
-            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active'));
-            el.classList.add('active');
-            if (!lat || !window.leafletMap) return;
-            
-            console.log("Flying to", lat, lon);
-            window.leafletMap.flyTo([lat, lon], 15, {{ duration: 1.5 }});
-            
-            setTimeout(() => {{
-                window.leafletMap.eachLayer(layer => {{
-                    if (layer.getLatLng && Math.abs(layer.getLatLng().lat - lat) < 0.005) layer.openPopup();
-                }});
-            }}, 1600);
         }}
-        document.getElementById('pw').addEventListener('keypress', e => {{ if (e.key === 'Enter') unlock(); }});
+        function focusJob(lat, lon, el) {{
+            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
+            if (!lat || !window.leafletMap) return;
+            window.leafletMap.flyTo([lat, lon], 15);
+            setTimeout(() => {{ window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
+        }}
     </script>
 </body>
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Surgery Version Created at {O1}")
+    print(f"Done! Surgery Fix at {O1}")
 
 if __name__ == "__main__":
     d, g = f_ld()

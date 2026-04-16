@@ -101,11 +101,11 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building Map with Script Surgery - {now}...")
+    print(f"Building final map (Surgery Fixed)... - {now}")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
-        
+    
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
@@ -125,7 +125,8 @@ def f_map(df, g):
 <html>
 <head>
     <title>Recruit Map | Surgery Fix</title>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
@@ -181,7 +182,6 @@ def f_map(df, g):
                 for (let s of inl) {{
                     const ns = document.createElement('script');
                     let code = s.textContent;
-                    // SURGERY: Force global assignment
                     code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
                     ns.textContent = code;
                     document.body.appendChild(ns);
