@@ -10,7 +10,7 @@ from geopy.geocoders import ArcGIS
 import folium
 from datetime import datetime
 
-# [System Config]
+# [System Config] - Pure Leaflet Engine Version
 C1 = "https://www.saramin.co.kr/zf_user/search?loc_cd=102250%2C102230%2C102240%2C102260%2C102220&cat_mcls=16%2C14&company_cd=0%2C1%2C2%2C3%2C4%2C5%2C6%2C7%2C9%2C10&search_optional_item=y&search_done=y&panel_count=y&recruitPageCount=40&recruitSort=reg_dt"
 D1 = "d.csv"
 D2 = "c.csv"
@@ -101,16 +101,24 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Rebuilding Map Engine (Leaflet Core) - {now}...")
-    # DEDUPLICATE: Prioritize entries with address information
+    print(f"Final Robust Build - {now}...")
+    df['c4'] = df['c4'].fillna('')
+    # DEDUPLICATE: Prioritize entries with address
     if 'id' in df.columns:
-        df['al'] = df['c4'].astype(str).apply(len)
+        df['al'] = df['c4'].str.len()
         df = df.sort_values(by='al', ascending=False)
         df = df.drop_duplicates(subset=['id'], keep='first').drop(columns=['al'])
     
     clean_data = []
+    geocoder = ArcGIS(timeout=10)
     for _, r in df.iterrows():
         adr = str(r["c4"]); coords = g.get(adr)
+        if adr and adr != 'nan' and not coords:
+            try:
+                cl = re.sub(r'\(.*?\)', '', adr); cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
+                loc = geocoder.geocode(cl)
+                if loc: coords = (loc.latitude, loc.longitude); g[adr] = coords
+            except: pass
         clean_data.append({
             "id": str(r.get("id", "")), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
             "loc": coords if coords else None, "sal": str(r["c5"]), "adr": adr
@@ -123,32 +131,30 @@ def f_map(df, g):
 <html>
 <head>
     <title>Recruit Map | Pure Engine</title>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
-        body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; }}
+        body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; display:flex; }}
         #login-screen {{ position: fixed; inset: 0; background: var(--bg); z-index: 5000; display:flex; justify-content:center; align-items:center; }}
         #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
-        #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 1000; }}
+        #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 12px; }}
         .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 8px; transition: 0.1s; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
-        #map-area {{ flex-grow: 1; position: relative; height: 100%; }}
-        #map {{ width: 100%; height: 100%; }}
+        #map {{ width: 100%; height: 100%; flex-grow: 1; }}
     </style>
 </head>
 <body>
     <div id="login-screen">
-        <div style="background:white;padding:3rem;border-radius:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.1);width:350px;">
+        <div style="background:white;padding:3rem;border-radius:24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.1);width:350px;">
             <h2>RECRUIT MAP</h2>
             <input type="password" id="pw-input" placeholder="PASSWORD" style="width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin:20px 0;text-align:center;">
             <button onclick="handleLogin()" style="width:100%;background:var(--primary);color:white;padding:14px;border:none;border-radius:12px;cursor:pointer;font-weight:600;">LOG IN</button>
             <div id="login-err" style="color:red;margin-top:10px;"></div>
-            <div style="margin-top:32px;font-size:11px;color:#999;">UPDATE: {now}</div>
         </div>
     </div>
     <div id="main-layout">
@@ -157,7 +163,7 @@ def f_map(df, g):
             <div style="padding:12px 24px; font-size:13px; color:#70757a;">Total <span id="job-count">0</span></div>
             <div id="job-list"></div>
         </div>
-        <div id="map-area"><div id="map"></div></div>
+        <div id="map"></div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
@@ -173,7 +179,7 @@ def f_map(df, g):
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
                 initMap(); renderItems(allJobs);
-            }} catch(e) {{ document.getElementById('login-err').innerText = 'Wrong Password'; }}
+            }} catch(e) {{ document.getElementById('login-err').innerText = 'Invalid'; }}
         }}
         function initMap() {{
             myMap = L.map('map', {{ zoomControl:false }}).setView([37.4979, 127.0276], 11);
@@ -181,7 +187,7 @@ def f_map(df, g):
             allJobs.forEach(j => {{
                 if (j.loc) {{
                     const m = L.marker([j.loc[0], j.loc[1]]).addTo(myMap);
-                    m.bindPopup(`<b style="color:var(--primary);">${{j.corp}}</b><br>${{j.title}}<br><a href="${{j.link}}" target="_blank">View Post</a>`);
+                    m.bindPopup(`<b style="color:var(--primary);">${{j.corp}}</b><br>${{j.title}}<br><br><a href="${{j.link}}" target="_blank">View Post</a>`);
                     markers[j.id || j.corp+j.title] = m;
                 }}
             }});
@@ -208,7 +214,7 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Success: Final Engine Deployed to {O1}")
+    print(f"Success: p.py synced at {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())
