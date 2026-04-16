@@ -10,8 +10,8 @@ from playwright.async_api import async_playwright
 from geopy.geocoders import ArcGIS
 from datetime import datetime
 
-# [System Config] - FAIL-SAFE Category Recovery Version
-C1 = "https://www.saramin.co.kr/zf_user/jobs/list/job-category?cat_mcls=16%2C14&loc_cd=102230%2C102240%2C102250%2C102260%2C102220%2C102520%2C102530%2C102540%2C102550%2C102510%2C102390&recruitSort=reg_dt"
+# [System Config] - UNIVERSAL SEARCH RECOVERY Version (1,000+ jobs)
+C1 = "https://www.saramin.co.kr/zf_user/search/recruit?cat_mcls=16%2C14&loc_cd=102230%2C102240%2C102250%2C102260%2C102220%2C102520%2C102530%2C102540%2C102550%2C102510%2C102390&recruitSort=reg_dt&recruitPageCount=100"
 D1 = "d.csv"
 D2 = "c.csv"
 O1 = "index.html"
@@ -38,12 +38,12 @@ def f_ld():
     return d, g
 
 async def f_list_universal(s_ids):
-    print("CRITICAL: Scanning Category List with Universal Regex Extractor...")
+    print("CRITICAL: Scanning SEARCH Results (Universal Mode)...")
     nj = []
     headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
     
     for i in range(1, 13):
-        u = f"{C1}&recruitPage={i}&recruitPageCount=100"
+        u = f"{C1}&recruitPage={i}"
         print(f"Scanning Page {i}/12...")
         try:
             r = requests.get(u, headers=headers, timeout=15)
