@@ -35,20 +35,20 @@ def f_ld():
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
-        for k, v in m_map.items(): 
+        for k, v in m_map.items():
             if k in d.columns: d = d.rename(columns={k: v})
     g = {}
     if os.path.exists(D2):
         df = pd.read_csv(D2, encoding='utf-8-sig')
-        if "주소" in df.columns: df = df.rename(columns={"주소": "a"})
-        g = { str(r['a']): (r['lat'], r['lon']) for _, r in df.iterrows() if not pd.isna(r['lat']) }
+        adr_col = "주소" if "주소" in df.columns else "a"
+        g = { str(r[adr_col]): (r['lat'], r['lon']) for _, r in df.iterrows() if not pd.isna(r['lat']) }
     return d, g
 
 async def f_list(p, s_ids):
     print("Scanning list...")
     nj = []
     for i in range(1, 4):
-        u = f"{C1}&recruitPage={i}"
+        u = f"{C1}/zf_user/search/recruit?loc_cd=102250%2C102230%2C102240%2C102260%2C102220&recruitPage={i}"
         try:
             await p.goto(u, timeout=30000, wait_until="load")
             await p.wait_for_selector('.item_recruit', timeout=5000)
@@ -101,126 +101,112 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Final Fix - Correcting Loader - {now}")
+    print(f"Rebuilding Map Engine (Leaflet Core) - {now}...")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
-        
-    search_data = []
-    m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
-    geocoder = ArcGIS(timeout=10)
-
-    for i, (_, r) in enumerate(df.iterrows()):
-        a = str(r["c4"]); co = g.get(a); t = r["c2"]; cor = r["c1"]
-        search_data.append({{"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]}})
-        if co:
-            h = f'''<div style="font-family:Noto Sans KR,sans-serif;padding:5px"><h4>{cor}</h4><p>{t}</p></div>'''
-            folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor).add_to(m)
-
-    tmp = m._repr_html_()
-    enc = f_encrypt(tmp, P1); s_json = json.dumps(search_data, ensure_ascii=False)
+    
+    clean_data = []
+    for _, r in df.iterrows():
+        adr = str(r["c4"]); coords = g.get(adr)
+        clean_data.append({
+            "id": str(r.get("id", "")), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
+            "loc": coords if coords else None, "sal": str(r["c5"]), "adr": adr
+        })
+    
+    payload = f_encrypt(json.dumps(clean_data, ensure_ascii=False), P1)
     
     html = f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Final Fix</title>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Recruit Map | Pure Engine</title>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
-        body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; }}
-        #main-layout {{ width: 100%; height: 100vh; display: none; }}
-        #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
-        #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 5px; transition: 0.1s; }}
+        body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; }}
+        #login-screen {{ position: fixed; inset: 0; background: var(--bg); z-index: 5000; display:flex; justify-content:center; align-items:center; }}
+        #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
+        #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 1000; }}
+        #job-list {{ flex-grow: 1; overflow-y: auto; padding: 12px; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 8px; transition: 0.1s; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
-        #map-area {{ flex-grow: 1; position: relative; }}
-        #loader {{ position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:100; display:flex; justify-content:center; align-items:center; flex-direction:column; }}
+        #map-area {{ flex-grow: 1; position: relative; height: 100%; }}
+        #map {{ width: 100%; height: 100%; }}
     </style>
 </head>
 <body>
-    <div id="login" style="position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;justify-content:center;align-items:center;">
-        <div style="background:white;padding:3rem;border-radius:20px;text-align:center;">
+    <div id="login-screen">
+        <div style="background:white;padding:3rem;border-radius:24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.1);width:350px;">
             <h2>RECRUIT MAP</h2>
-            <input type="password" id="pw" style="width:100%;padding:10px;margin:20px 0;text-align:center;">
-            <button style="width:100%;background:var(--primary);color:white;padding:12px;border:none;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
-            <div style="margin-top:20px;font-size:0.7rem;color:#999;">UPDATE: {now}</div>
+            <input type="password" id="pw-input" placeholder="PASSWORD" style="width:100%;padding:14px;border-radius:12px;border:1px solid #ddd;margin:20px 0;text-align:center;">
+            <button onclick="handleLogin()" style="width:100%;background:var(--primary);color:white;padding:14px;border:none;border-radius:12px;cursor:pointer;font-weight:600;">LOG IN</button>
+            <div id="login-err" style="color:red;margin-top:10px;"></div>
+            <div style="margin-top:32px;font-size:11px;color:#999;">UPDATE: {now}</div>
         </div>
     </div>
     <div id="main-layout">
         <div id="sidebar">
-            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;outline:none;"></div>
+            <div style="padding:24px;border-bottom:1px solid var(--border);"><h1>📍 Recruit</h1><input type="text" id="search-box" placeholder="Search..." oninput="handleSearch(this.value)" style="width:100%;padding:12px;border-radius:24px;border:1px solid var(--border);background:#f1f3f4;outline:none;"></div>
+            <div style="padding:12px 24px; font-size:13px; color:#70757a;">Total <span id="job-count">0</span></div>
             <div id="job-list"></div>
         </div>
-        <div id="map-area">
-            <div id="loader" style="display:none;"><b>지도를 로딩 중입니다...</b></div>
-            <div id="content" style="width:100%;height:100%;"></div>
-        </div>
+        <div id="map-area"><div id="map"></div></div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
-        const ed = "{enc}"; const md = {s_json}; window.leafletMap = null;
-        async function unlock() {{
-            const pw = document.getElementById('pw').value;
+        const encryptedData = "{payload}"; let allJobs = []; let markers = {{}}; let myMap = null;
+        async function handleLogin() {{
+            const pw = document.getElementById('pw-input').value;
             const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
             const key = []; for (let i=0; i<hash.length; i+=2) key.push(parseInt(hash.substr(i, 2), 16));
-            const raw = atob(ed); const res = new Uint8Array(raw.length);
-            for (let i=0; i<raw.length; i++) res[i] = raw.charCodeAt(i) ^ key[i % key.length];
-            const decoded = new TextDecoder().decode(res);
-            if (decoded.includes('folium')) {{
-                document.getElementById('login').style.display = 'none';
+            try {{
+                const raw = atob(encryptedData); const res = new Uint8Array(raw.length);
+                for (let i=0; i<raw.length; i++) res[i] = raw.charCodeAt(i) ^ key[i % key.length];
+                allJobs = JSON.parse(new TextDecoder().decode(res));
+                document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
-                document.getElementById('loader').style.display = 'flex';
-                
-                const container = document.getElementById('content');
-                container.innerHTML = decoded;
-                const scripts = Array.from(container.getElementsByTagName('script'));
-                const ext = scripts.filter(s => s.src);
-                const inl = scripts.filter(s => !s.src);
-
-                try {{
-                    for (let s of ext) {{
-                        await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
-                    }}
-                    for (let s of inl) {{
-                        const ns = document.createElement('script');
-                        let code = s.textContent;
-                        code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
-                        ns.textContent = code;
-                        document.body.appendChild(ns);
-                    }}
-                }} catch(e) {{ console.error(e); }}
-
-                setTimeout(() => {{ 
-                    if(window.leafletMap) window.leafletMap.invalidateSize(); 
-                    document.getElementById('loader').style.display = 'none';
-                    renderList(md); 
-                }}, 800);
-            }} else alert("Wrong Password");
+                initMap(); renderItems(allJobs);
+            }} catch(e) {{ document.getElementById('login-err').innerText = 'Wrong Password'; }}
         }}
-        function renderList(list) {{
-            const container = document.getElementById('job-list');
-            container.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
+        function initMap() {{
+            myMap = L.map('map', {{ zoomControl:false }}).setView([37.4979, 127.0276], 11);
+            L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(myMap);
+            allJobs.forEach(j => {{
+                if (j.loc) {{
+                    const m = L.marker([j.loc[0], j.loc[1]]).addTo(myMap);
+                    m.bindPopup(`<b style="color:var(--primary);">${{j.corp}}</b><br>${{j.title}}<br><a href="${{j.link}}" target="_blank">View Post</a>`);
+                    markers[j.id || j.corp+j.title] = m;
+                }}
+            }});
         }}
-        function filterJobs(v) {{
-            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
-            renderList(filtered);
-            if (window.leafletMap) window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
+        function renderItems(list) {{
+            const listEl = document.getElementById('job-list');
+            document.getElementById('job-count').innerText = list.length;
+            listEl.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob('${{j.id}}', ${{j.loc ? j.loc[0] : 'null'}}, ${{j.loc ? j.loc[1] : 'null'}}, this)"><div class="corp">${{j.corp}}</div><div class="title">${{j.title}}</div></div>`).join('');
         }}
-        function focusJob(lat, lon, el) {{
-            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); if(el) el.classList.add('active');
-            if (!lat || !window.leafletMap) return;
-            window.leafletMap.flyTo([lat, lon], 15);
-            setTimeout(() => {{ window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
+        function handleSearch(val) {{
+            const v = val.toLowerCase(); const filtered = allJobs.filter(j => j.corp.toLowerCase().includes(v) || j.title.toLowerCase().includes(v));
+            renderItems(filtered); allJobs.forEach(j => {{ const m = markers[j.id || j.corp+j.title]; if(m) {{ if(filtered.some(f => f.id===j.id)) m.addTo(myMap); else myMap.removeLayer(m); }} }});
         }}
+        function focusJob(id, lat, lon, el) {{
+            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
+            if (lat && lon && myMap) {{
+                myMap.flyTo([lat, lon], 15, {{ duration:1.5 }});
+                const m = markers[id]; if(m) setTimeout(() => m.openPopup(), 1600);
+            }}
+        }}
+        document.getElementById('pw-input').addEventListener('keypress', (e) => {{ if(e.key==='Enter') handleLogin(); }});
     </script>
 </body>
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Done! Final Fix at {O1}")
+    print(f"Success: Final Engine Deployed to {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())
