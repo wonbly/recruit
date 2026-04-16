@@ -33,7 +33,7 @@ def f_sal(t):
     except: return ""
 
 def f_ld():
-    d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "job_id"])
+    d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
@@ -62,9 +62,9 @@ async def f_list(p, s_ids):
             if not l.startswith('http'): l = 'https://www.saramin.co.kr' + l
             jid = f_idx(l)
             if jid in s_ids: continue
-            cor = await (await it.query_selector('.corp_name a')).inner_text()
-            tit = await j_el.inner_text()
-            nj.append({"c1": cor.strip(), "c2": tit.strip(), "c3": l, "id": jid})
+            cor = (await (await it.query_selector('.corp_name a')).inner_text()).strip()
+            tit = (await j_el.inner_text()).strip()
+            nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid})
     return nj
 
 async def f_deep(jobs):
@@ -98,13 +98,16 @@ def f_encrypt(data, pw):
     key = hashlib.sha256(pw.encode()).digest()
     data_bytes = data.encode('utf-8')
     res = bytearray()
-    for i in range(len(data_bytes)): res.append(data_bytes[i] ^ key[i % len(key)])
+    for i in range(len(data_bytes)): res.append(data_bytes[i] ^ key[i % key.length])
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building sidebar map (Fixed) - {now}...")
+    print(f"Building final map (Ultimate Fix) - {now}...")
     df['c4'] = df['c4'].fillna('')
+    if 'id' in df.columns:
+        df = df.drop_duplicates(subset=['id'], keep='first')
+        
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
@@ -125,27 +128,23 @@ def f_map(df, g):
             folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor).add_to(m)
 
     tmp = m._repr_html_()
-    # Inject global map detection
-    map_id_match = re.search(r'id="(map_[a-z0-9]+)"', tmp)
-    if map_id_match:
-        map_id = map_id_match.group(1)
-        tmp += f"<script>window.leafletMap = {map_id};</script>"
-
     enc = f_encrypt(tmp, P1); s_json = json.dumps(search_data, ensure_ascii=False)
+    
     html = f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Job Map | Sidebar Search</title>
-    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500&family=Outfit:wght@400;600&display=swap" rel="stylesheet">
+    <title>Recruit Map | Ultimate Fix</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
         body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; }}
         #main-layout {{ display: flex; width: 100%; height: 100vh; }}
         #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom:5px; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 5px; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
@@ -162,14 +161,15 @@ def f_map(df, g):
     </div>
     <div id="main-layout" style="display:none;">
         <div id="sidebar">
-            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="회사명 검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;"></div>
+            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;"></div>
+            <div style="padding:10px 20px; font-size: 0.8rem; color: #666;">건수: <span id="count">0</span></div>
             <div id="job-list"></div>
         </div>
         <div id="map-area"><div id="content" style="width:100%;height:100%;"></div></div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
-        const ed = "{enc}"; const md = {s_json};
+        const ed = "{enc}"; const md = {s_json}; window.leafletMap = null;
         async function unlock() {{
             const pw = document.getElementById('pw').value;
             const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
@@ -180,6 +180,12 @@ def f_map(df, g):
             if (decoded.includes('folium')) {{
                 document.getElementById('login').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
+                
+                // HOOK L.map
+                const hook = document.createElement('script');
+                hook.textContent = `(function(){{const c=setInterval(()=>{{if(window.L&&window.L.map){{const o=window.L.map;window.L.map=function(){{const m=o.apply(this,arguments);window.leafletMap=m;return m;}};clearInterval(c);}}}},50);}})();`;
+                document.head.appendChild(hook);
+
                 document.getElementById('content').innerHTML = decoded;
                 for (let s of document.getElementById('content').getElementsByTagName('script')) {{
                     const ns = document.createElement('script'); if (s.src) ns.src = s.src; else ns.textContent = s.textContent; document.body.appendChild(ns);
@@ -189,10 +195,11 @@ def f_map(df, g):
         }}
         function renderList(list) {{
             const container = document.getElementById('job-list');
+            document.getElementById('count').innerText = list.length;
             container.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},'${{j.n.replace(/'/g,"\\'")}}',this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
         }}
         function filterJobs(v) {{
-            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()));
+            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (window.leafletMap) window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
         }}
@@ -207,7 +214,7 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Done! Updated p.py at {O1}")
+    print(f"Done! Ultimate Fix Version at {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())
