@@ -60,9 +60,17 @@ async def f_list(p, s_ids):
             if not l.startswith('http'): l = 'https://www.saramin.co.kr' + l
             jid = f_idx(l)
             if jid in s_ids: continue
+            
+            # Smart Scrape: Get basic info + location FROM THE LIST
             cor = (await (await it.query_selector('.corp_name a')).inner_text()).strip()
             tit = (await j_el.inner_text()).strip()
-            nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid})
+            
+            # Location is in .job_condition span[0] usually
+            conds = await it.query_selector_all('.job_condition span')
+            loc_txt = ""
+            if conds: loc_txt = (await conds[0].inner_text()).strip()
+            
+            nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc_txt})
     return nj
 
 async def f_deep(jobs):
@@ -115,13 +123,20 @@ def f_map(df, g):
         adr = str(r["c4"]); coords = g.get(adr)
         if adr and adr != 'nan' and not coords:
             try:
-                cl = re.sub(r'\(.*?\)', '', adr); cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
+                # Optimized cleaning for ArcGIS
+                cl = re.sub(r'\(.*?\)', '', adr)
+                cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
+                if not cl: continue
                 loc = geocoder.geocode(cl)
-                if loc: coords = (loc.latitude, loc.longitude); g[adr] = coords
+                if loc: 
+                    coords = (loc.latitude, loc.longitude)
+                    g[adr] = coords
+                    print(f"New Loc: {cl} -> {coords}")
             except: pass
+        
         clean_data.append({
             "id": str(r.get("id", "")), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
-            "loc": coords if coords else None, "sal": str(r["c5"]), "adr": adr
+            "loc": coords if coords else None, "sal": str(r.get("c5", "")), "adr": adr
         })
     
     payload = f_encrypt(json.dumps(clean_data, ensure_ascii=False), P1)
