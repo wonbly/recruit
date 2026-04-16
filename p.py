@@ -5,22 +5,18 @@ import asyncio
 import base64
 import json
 import hashlib
-import requests  # Stable for listing
+import requests
 from playwright.async_api import async_playwright
 from geopy.geocoders import ArcGIS
 from datetime import datetime
 
-# [System Config] - NEW Category List Version (1,000+ jobs)
+# [System Config] - FAIL-SAFE Category Recovery Version
 C1 = "https://www.saramin.co.kr/zf_user/jobs/list/job-category?cat_mcls=16%2C14&loc_cd=102230%2C102240%2C102250%2C102260%2C102220%2C102520%2C102530%2C102540%2C102550%2C102510%2C102390&recruitSort=reg_dt"
 D1 = "d.csv"
 D2 = "c.csv"
 O1 = "index.html"
-W1 = 10 # Parallel threads (Faster verification)
+W1 = 12 # Higher parallelism for 1,100 items
 P1 = "250222"
-
-def f_idx(u):
-    m = re.search(r'rec_idx=(\d+)', u)
-    return m.group(1) if m else u
 
 def f_sal(t):
     try:
@@ -41,58 +37,64 @@ def f_ld():
         g = { str(r[adr_col]): (r['lat'], r['lon']) for _, r in df.iterrows() if not pd.isna(r['lat']) }
     return d, g
 
-async def f_list_requests(s_ids):
-    print("Scanning NEW Category List (Requests Robust Mode)...")
+async def f_list_universal(s_ids):
+    print("CRITICAL: Scanning Category List with Universal Regex Extractor...")
     nj = []
     headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
+    
     for i in range(1, 13):
         u = f"{C1}&recruitPage={i}&recruitPageCount=100"
-        print(f"Page {i}/12...")
+        print(f"Scanning Page {i}/12...")
         try:
             r = requests.get(u, headers=headers, timeout=15)
             html = r.text
             
-            # Universal pattern: Extract IDs, Corps, and Titles reliably using regex
-            # Patterns are based on dump_live auditing
-            matches = re.finditer(rf'rec_idx=([0-9]+)', html)
-            page_ids = []
-            for m in matches:
-                pid = m.group(1)
-                if pid not in page_ids: page_ids.append(pid)
+            # FAIL-SAFE: Just extract ALL rec_idx numbers regardless of proximity logic
+            raw_ids = re.findall(r'rec_idx=([0-9]{8,10})', html)
+            page_ids = list(dict.fromkeys(raw_ids))
             
             found_count = 0
             for jid in page_ids:
                 if jid in s_ids: continue
+                
+                # Broad capture for Corp and Title around this ID
+                # We search for the specific ID and look for title/corp nearby (within 3k chars)
+                chunk_start = html.find(f'rec_idx={jid}')
+                if chunk_start == -1: continue
+                chunk = html[max(0, chunk_start-1500):chunk_start+1500]
+                
                 try:
-                    # Extraction per ID
-                    # Company: class="company_nm".*?>(.*?)</a>
-                    corp_match = re.search(rf'class="company_nm">.*?target="_blank">\s*(.*?)\s*</a>.*?rec_idx={jid}', html, re.DOTALL)
-                    if not corp_match:
-                        corp_match = re.search(rf'rec_idx={jid}.*?class="corp_name".*?>(.*?)</a>', html, re.DOTALL)
+                    # Corp Name
+                    corp_match = re.search(r'class="company_nm".*?>(.*?)</a>', chunk, re.DOTALL)
+                    if not corp_match: corp_match = re.search(r'class="corp_name".*?>(.*?)</a>', chunk, re.DOTALL)
                     
-                    # Title Search
-                    title_match = re.search(rf'rec_idx={jid}.*?title="(.*?)"', html)
-                    if not title_match:
-                        title_match = re.search(rf'rec_idx={jid}.*?<span>(.*?)</span>', html, re.DOTALL)
+                    # Title
+                    title_match = re.search(r'class="job_tit".*?<span>(.*?)</span>', chunk, re.DOTALL)
+                    if not title_match: title_match = re.search(r'title="(.*?)"', chunk)
                     
-                    # Location
-                    loc_match = re.search(rf'rec_idx={jid}.*?class="work_place">(.*?)</p>', html, re.DOTALL)
-                    if not loc_match:
-                        loc_match = re.search(rf'rec_idx={jid}.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
+                    # Location (work_place or job_condition)
+                    loc_match = re.search(r'class="work_place">(.*?)</p>', chunk, re.DOTALL)
+                    if not loc_match: loc_match = re.search(r'class="job_condition".*?<span>(.*?)</span>', chunk, re.DOTALL)
                     
-                    if corp_match and title_match:
-                        cor = re.sub(r'<[^>]+>', '', corp_match.group(1)).strip()
-                        tit = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
-                        tit = tit.replace("&#39;", "'").replace("&amp;", "&")
-                        loc = re.sub(r'<[^>]+>', '', loc_match.group(1)).strip() if loc_match else ""
-                        
-                        l = f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={jid}"
-                        nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc})
-                        s_ids.add(jid)
-                        found_count += 1
+                    cor = re.sub(r'<[^>]+>', '', corp_match.group(1)).strip() if corp_match else "Unknown Corp"
+                    tit = re.sub(r'<[^>]+>', '', title_match.group(1)).strip() if title_match else "Unknown Title"
+                    loc = re.sub(r'<[^>]+>', '', loc_match.group(1)).strip() if loc_match else ""
+                    
+                    # CLEANUP HTML ESCAPES
+                    tit = tit.replace("&#39;", "'").replace("&amp;", "&").replace("&quot;", '"')
+                    cor = cor.replace("&#39;", "'").replace("&amp;", "&")
+                    
+                    l = f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={jid}"
+                    nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc})
+                    s_ids.add(jid)
+                    found_count += 1
                 except: continue
-            print(f"Captured {found_count} items on page {i}.")
-        except: continue
+            
+            print(f"Page {i}: Captured {found_count} items. Running Total: {len(nj)}")
+        except Exception as e:
+            print(f"Error on page {i}: {e}")
+            continue
+            
     return nj
 
 async def f_deep(jobs):
@@ -100,6 +102,7 @@ async def f_deep(jobs):
     print(f"Deep scanning {len(jobs)} items with {W1} workers...")
     res = []
     async with async_playwright() as p:
+        # Use full-head mode if needed, but we'll try headless first
         b = await p.chromium.launch(headless=True)
         async def worker(sub_list):
             ctx = await b.new_context(user_agent="Mozilla/5.0")
@@ -115,9 +118,11 @@ async def f_deep(jobs):
                         return { "a": a, "s": s };
                     }''')
                     if data["a"]: j["c4"] = data["a"].strip()
-                    j["c5"] = data["s"].strip(); j["c6"] = f_sal(j["c5"]); res.append(j)
+                    j["c5"] = data["s"].strip(); j["c6"] = f_sal(j["c5"])
+                    res.append(j)
                 except: continue
             await ctx.close()
+            
         ch = (len(jobs) // W1) + 1
         ts = [worker(jobs[i:i + ch]) for i in range(0, len(jobs), ch)]
         await asyncio.gather(*ts); await b.close()
@@ -132,64 +137,68 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building Premium Map - {now}...")
+    print(f"Building Map Stage - {now}...")
     df['c4'] = df['c4'].fillna('')
-    if 'id' in df.columns:
-        df['al'] = df['c4'].str.len()
-        df = df.sort_values(by='al', ascending=False)
-        df = df.drop_duplicates(subset=['id'], keep='first').drop(columns=['al'])
+    # Deduplicate by ID
+    df = df.drop_duplicates(subset=['id'], keep='first')
     
     clean_data = []
     geocoder = ArcGIS(timeout=10)
     for _, r in df.iterrows():
         adr = str(r["c4"]); coords = g.get(adr)
+        # Attempt to geocode if coordinate missing
         if adr and len(adr) > 3 and adr != 'nan' and not coords:
             try:
                 cl = re.sub(r'\(.*?\)', '', adr); cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
-                if len(cl) < 3: continue
-                loc = geocoder.geocode(cl)
-                if loc: coords = (loc.latitude, loc.longitude); g[adr] = coords
+                if len(cl) > 3:
+                    loc = geocoder.geocode(cl)
+                    if loc: coords = (loc.latitude, loc.longitude); g[adr] = coords
             except: pass
         clean_data.append({
-            "id": str(r.get("id", "")), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
+            "id": str(r["id"]), "corp": str(r["c1"]), "title": str(r["c2"]), "link": str(r["c3"]),
             "loc": coords if coords else None, "sal": str(r.get("c5", "")), "adr": adr
         })
     
     payload = f_encrypt(json.dumps(clean_data, ensure_ascii=False), P1)
     
-    with open(O1, "r", encoding="utf-8") as f: content = f.read()
-    # Update only the encrypted data and update time part
-    updated_html = re.sub(r'const encryptedData = ".*?";', f'const encryptedData = "{payload}";', content)
-    updated_html = re.sub(r'LAST UPDATE: .*?</div>', f'LAST UPDATE: {now}</div>', updated_html)
-    with open(O1, "w", encoding="utf-8") as f: f.write(updated_html)
-    print(f"Success: High-capacity Map updated.")
+    # Read existing index.html to update payload
+    if os.path.exists(O1):
+        with open(O1, "r", encoding="utf-8") as f: content = f.read()
+        updated_html = re.sub(r'const encryptedData = ".*?";', f'const encryptedData = "{payload}";', content)
+        updated_html = re.sub(r'LAST UPDATE: .*?</div>', f'LAST UPDATE: {now}</div>', updated_html)
+        with open(O1, "w", encoding="utf-8") as f: f.write(updated_html)
+        print("Success: Map payload updated.")
+    else:
+        print("Error: index.html not found.")
 
 async def main():
-    print("Cleaning database...")
-    d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
-    d.to_csv(D1, index=False, encoding='utf-8-sig')
-    
+    print("Pre-Scrape Check...")
     _, g = f_ld(); s_ids = set()
     
-    # 📡 USE REQUESTS for listing scan
-    nj = await f_list_requests(s_ids)
+    # 1. SCAN LIST (FAIL-SAFE)
+    nj = await f_list_universal(s_ids)
     
-    if nj:
-        print(f"Captured {len(nj)} items. Starting detailed scan...")
-        sc = await f_deep(nj)
-        if sc:
-            d = pd.concat([d, pd.DataFrame(sc)], ignore_index=True)
-            d.to_csv(D1, index=False, encoding='utf-8-sig')
-            print(f"Successfully saved {len(d)} jobs to d.csv.")
-        else:
-            print("Failed to scan details.")
-    else:
-        print("Failed to scan list items. Requests might be blocked or structure changed.")
+    # SAFETY LOCK: If we captured less than 100 items (not even 1,000 but just 100), something is wrong.
+    if len(nj) < 100:
+        print(f"CRITICAL SAFETY LOCK: Only {len(nj)} items found. Aborting push to prevent empty map.")
+        return
+        
+    print(f"Safety Check Passed: {len(nj)} items captured.")
     
-    # Reload and build map
-    d_final, g_final = f_ld()
-    f_map(d_final, g_final)
-    # Save coordinate cache
-    pd.DataFrame([{'a':k, 'lat':v[0], 'lon':v[1]} for k,v in g_final.items()]).to_csv(D2, index=False, encoding='utf-8-sig')
+    # 2. DEEP SCAN (RECOVERY)
+    sc = await f_deep(nj)
+    
+    # 3. SAVE DB
+    if sc:
+        final_df = pd.DataFrame(sc)
+        final_df.to_csv(D1, index=False, encoding='utf-8-sig')
+        print(f"DB Updated: {len(final_df)} items saved.")
+        
+        # 4. BUILD MAP
+        f_map(final_df, g)
+        
+        # 5. SAVE COORD CACHE
+        pd.DataFrame([{'a':k, 'lat':v[0], 'lon':v[1]} for k,v in g.items()]).to_csv(D2, index=False, encoding='utf-8-sig')
+        print("All processes complete.")
 
 if __name__ == "__main__": asyncio.run(main())
