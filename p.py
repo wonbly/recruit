@@ -42,7 +42,7 @@ def f_ld():
     return d, g
 
 async def f_list_requests(s_ids):
-    print("📡 Scanning NEW Category List (Requests Robust Mode)...")
+    print("Scanning NEW Category List (Requests Robust Mode)...")
     nj = []
     headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
     for i in range(1, 13):
