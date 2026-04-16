@@ -35,7 +35,8 @@ def f_ld():
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
-        for k, v in d.columns: d = d.rename(columns={k: v})
+        for k, v in m_map.items(): 
+            if k in d.columns: d = d.rename(columns={k: v})
     g = {}
     if os.path.exists(D2):
         df = pd.read_csv(D2, encoding='utf-8-sig')
