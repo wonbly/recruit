@@ -36,13 +36,12 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building map with Sequential Script Loading - {now}...")
+    print(f"Building Map with Script Surgery - {now}...")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
     
     search_data = []
-    # Force Cartesian tiles or light theme
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     
     for i, (_, r) in enumerate(df.iterrows()):
@@ -52,14 +51,7 @@ def f_map(df, g):
         search_data.append({"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]})
         if co:
             col = 'blue' if any(kw in str(t) for kw in ['마케팅', '마케터']) else 'red'
-            h = f"""
-            <div style="font-family: 'Noto Sans KR', sans-serif; padding: 10px; min-width: 200px;">
-                <h4 style="margin: 0 0 5px 0; color: #1a73e8;">{cor}</h4>
-                <p style="margin: 0 0 10px 0; font-size: 0.9rem; color: #333;">{t}</p>
-                <div style="font-size: 0.85rem; color: #666; line-height: 1.6;">💰 {r["c5"]}<br>📍 {a}</div>
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
-                <a href="{r["c3"]}" target="_blank" style="text-decoration: none; color: white; background: #1a73e8; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 0.8rem;">공고 보기</a>
-            </div>"""
+            h = f"""<div style="font-family:Noto Sans KR,sans-serif;padding:5px"><h4>{cor}</h4><p>{t}</p></div>"""
             folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(m)
             
     tmp = m._repr_html_()
@@ -70,7 +62,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Sequential Fix</title>
+    <title>Recruit Map | Ultimate Fix V2</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -78,50 +70,46 @@ def f_map(df, g):
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
         body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; }}
         #login-screen {{ position: fixed; inset: 0; background: var(--bg); z-index: 2000; display:flex; justify-content:center; align-items:center; }}
-        .login-card {{ background: white; padding: 3rem; border-radius: 20px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.05); }}
         #main-layout {{ display: none; height: 100vh; width: 100%; display: flex; }}
         #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
-        .sidebar-header {{ padding: 20px; border-bottom: 1px solid var(--border); }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; transition: 0.15s; border: 1px solid transparent; margin-bottom: 4px; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: 0.15s; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
-        .job-card .corp {{ font-size: 0.85rem; font-weight: 600; color: #5f6368; }}
-        .job-card .title {{ font-size: 0.95rem; font-weight: 500; margin: 2px 0; }}
         #map-area {{ flex-grow: 1; position: relative; }}
-        #loader {{ display:none; position:absolute; inset:0; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; }}
+        #loader {{ display:none; position:absolute; inset:0; background:rgba(255,255,255,0.9); z-index:100; justify-content:center; align-items:center; flex-direction:column; }}
     </style>
 </head>
 <body>
     <div id="login-screen">
-        <div class="login-card">
+        <div style="background:white;padding:3rem;border-radius:20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.1);">
             <h2>RECRUIT MAP</h2>
-            <input type="password" id="pw" placeholder="PASSWORD" style="width:100%; padding:12px; margin:20px 0; text-align:center;">
-            <button style="width:100%; background:var(--primary); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;" onclick="unlock()">로그인</button>
-            <div id="err" style="color:red; margin-top:10px;"></div>
-            <div style="margin-top: 30px; font-size: 0.75rem; color: #999;">최근 업데이트: {now}</div>
+            <input type="password" id="pw" placeholder="PASSWORD" style="width:100%;padding:12px;margin:20px 0;text-align:center;">
+            <button style="width:100%;background:var(--primary);color:white;border:none;padding:12px;border-radius:8px;cursor:pointer;" onclick="unlock()">로그인</button>
+            <div id="err" style="color:red;margin-top:10px;"></div>
+            <div style="margin-top:20px;font-size:0.7rem;color:#999;">UPDATE: {now}</div>
         </div>
     </div>
     <div id="main-layout">
         <div id="sidebar">
-            <div class="sidebar-header"><h1>📍 Recruit</h1><input type="text" id="search-input" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%; padding:12px; border-radius:24px; border:1px solid var(--border); background:#f1f3f4; outline:none;"></div>
-            <div style="padding:10px 20px; font-size:0.8rem; color:#666; border-bottom:1px solid #eee;">총 <span id="count">0</span>건</div>
+            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="회사명 검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;outline:none;"></div>
+            <div style="padding:10px 20px;font-size:0.8rem;color:#666;border-bottom:1px solid #eee;">총 <span id="count">0</span>건</div>
             <div id="job-list"></div>
         </div>
         <div id="map-area">
-            <div id="loader"><b>지도를 로딩 중입니다...</b><p>잠시만 기다려 주세요.</p></div>
+            <div id="loader"><b>지도를 준비 중입니다...</b><p>잠시만 기다려 주세요.</p></div>
             <div id="content" style="width:100%; height:100%;"></div>
         </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
-        const encryptedData = "{enc}"; const markersData = {s_json}; window.leafletMap = null;
+        const ed = "{enc}"; const md = {s_json}; window.leafletMap = null;
         
         async function unlock() {{
             const pw = document.getElementById('pw').value;
             const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
             const key = []; for (let i=0; i<hash.length; i+=2) key.push(parseInt(hash.substr(i, 2), 16));
-            const raw = atob(encryptedData); const res = new Uint8Array(raw.length);
+            const raw = atob(ed); const res = new Uint8Array(raw.length);
             for (let i=0; i<raw.length; i++) res[i] = raw.charCodeAt(i) ^ key[i % key.length];
             const decoded = new TextDecoder().decode(res);
             if (decoded.includes('folium')) {{
@@ -129,49 +117,36 @@ def f_map(df, g):
                 document.getElementById('main-layout').style.display = 'flex';
                 document.getElementById('loader').style.display = 'flex';
                 
-                // 1. Capture Map Object Hook
-                (function() {{
-                    const checkInterval = setInterval(() => {{
-                        if (window.L && window.L.map) {{
-                            const originalLMap = window.L.map;
-                            window.L.map = function() {{
-                                const m = originalLMap.apply(this, arguments);
-                                window.leafletMap = m;
-                                return m;
-                            }};
-                            clearInterval(checkInterval);
-                        }}
-                    }}, 20);
-                }})();
-
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
                 
-                // 2. Sequential Script Loading Strategy
-                const allScripts = Array.from(container.getElementsByTagName('script'));
-                const externalScripts = allScripts.filter(s => s.src);
-                const inlineScripts = allScripts.filter(s => !s.src);
+                const allS = Array.from(container.getElementsByTagName('script'));
+                const extS = allS.filter(s => s.src);
+                const inlS = allS.filter(s => !s.src);
 
-                // Load all external scripts one by one
-                for (let s of externalScripts) {{
-                    await new Promise((resolve) => {{
-                        const ns = document.createElement('script');
-                        ns.src = s.src;
-                        ns.onload = resolve;
-                        ns.onerror = resolve;
-                        document.body.appendChild(ns);
-                    }});
+                for (let s of extS) {{
+                    await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
                 }}
 
-                // Finally run all inline scripts (this is where the map is actually created)
-                for (let s of inlineScripts) {{
+                for (let s of inlS) {{
                     const ns = document.createElement('script');
-                    ns.textContent = s.textContent;
+                    let code = s.textContent;
+                    // SURGERY: Force global assignment even in closures
+                    // Folium usually does: var map_xxxx = L.map(...)
+                    // We replace it with: window.leafletMap = window.map_xxxx = L.map(...)
+                    code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
+                    ns.textContent = code;
                     document.body.appendChild(ns);
                 }}
 
-                document.getElementById('loader').style.display = 'none';
-                renderList(markersData);
+                setTimeout(() => {{
+                    if (window.leafletMap) {{
+                        console.log("SURGERY SUCCESS: Map captured.");
+                        window.leafletMap.invalidateSize();
+                    }}
+                    document.getElementById('loader').style.display = 'none';
+                    renderList(md);
+                }}, 500);
             }} else {{ document.getElementById('err').innerText = "Wrong Password"; }}
         }}
 
@@ -179,16 +154,17 @@ def f_map(df, g):
             const container = document.getElementById('job-list');
             document.getElementById('count').innerText = list.length;
             container.innerHTML = list.map((j, idx) => `
-                <div class="job-card" onclick="focusJob(${{j.l ? j.l[0] : 'null'}}, ${{j.l ? j.l[1] : 'null'}}, '${{j.n.replace(/'/g, "\\'")}}', this)">
-                    <div class="corp">${{j.n}}</div>
-                    <div class="title">${{j.t}}</div>
+                <div class="job-card" onclick="focusJob(${{j.l ? j.l[0] : 'null'}}, ${{j.l ? j.l[1] : 'null'}}, this)">
+                    <div style="font-size:0.85rem; font-weight:600; color:#5f6368;">${{j.n}}</div>
+                    <div style="font-size:0.95rem; font-weight:500; margin:4px 0;">${{j.t}}</div>
+                    <div style="font-size:0.8rem; color:#999;">💰 ${{j.s || '-'}}</div>
                 </div>
             `).join('');
-        }}
+        }
 
         function filterJobs(val) {{
             const v = val.toLowerCase();
-            const filtered = markersData.filter(m => m.n.toLowerCase().includes(v) || m.t.toLowerCase().includes(v));
+            const filtered = md.filter(m => m.n.toLowerCase().includes(v) || m.t.toLowerCase().includes(v));
             renderList(filtered);
             if (window.leafletMap) {{
                 window.leafletMap.eachLayer(layer => {{
@@ -198,17 +174,16 @@ def f_map(df, g):
                     }}
                 }});
             }}
-        }}
+        }
 
-        function focusJob(lat, lon, name, el) {{
+        function focusJob(lat, lon, el) {{
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active'));
             el.classList.add('active');
-            if (!lat || !window.leafletMap) {{
-                // Try to find map one more time if missing
-                if(!window.leafletMap) console.warn("Map not initialized yet");
-                return;
-            }}
+            if (!lat || !window.leafletMap) return;
+            
+            console.log("Flying to", lat, lon);
             window.leafletMap.flyTo([lat, lon], 15, {{ duration: 1.5 }});
+            
             setTimeout(() => {{
                 window.leafletMap.eachLayer(layer => {{
                     if (layer.getLatLng && Math.abs(layer.getLatLng().lat - lat) < 0.005) layer.openPopup();
@@ -222,7 +197,7 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Sequential Fix Version Created at {O1}")
+    print(f"Done! Surgery Version Created at {O1}")
 
 if __name__ == "__main__":
     d, g = f_ld()

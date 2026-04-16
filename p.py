@@ -101,11 +101,11 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building map with Sequential Fix - {now}...")
+    print(f"Building Map with Script Surgery - {now}...")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
-    
+        
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
@@ -124,17 +124,16 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Sequential Fix</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Recruit Map | Surgery Fix</title>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
         body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; }}
         #main-layout {{ width: 100%; height: 100vh; display: none; }}
         #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
-        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 5px; }}
+        .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 5px; transition: 0.1s; }}
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
@@ -143,16 +142,15 @@ def f_map(df, g):
 <body>
     <div id="login" style="position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;justify-content:center;align-items:center;">
         <div style="background:white;padding:3rem;border-radius:20px;text-align:center;">
-            <h2>RECRUIT MAP</h2><p>PASSWORD: 250222</p>
-            <input type="password" id="pw" style="width:100%;padding:10px;margin:20px 0;">
-            <button style="width:100%;background:var(--primary);color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
+            <h2>RECRUIT MAP</h2>
+            <input type="password" id="pw" style="width:100%;padding:10px;margin:20px 0;text-align:center;">
+            <button style="width:100%;background:var(--primary);color:white;padding:12px;border:none;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
             <div style="margin-top:20px;font-size:0.7rem;color:#999;">UPDATE: {now}</div>
         </div>
     </div>
     <div id="main-layout">
         <div id="sidebar">
-            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;"></div>
-            <div style="padding:10px 20px; font-size: 0.8rem; color: #666;">건수: <span id="count">0</span></div>
+            <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;outline:none;"></div>
             <div id="job-list"></div>
         </div>
         <div id="map-area"><div id="content" style="width:100%;height:100%;"></div></div>
@@ -171,50 +169,38 @@ def f_map(df, g):
                 document.getElementById('login').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
                 
-                (function() {{
-                    const c = setInterval(() => {{
-                        if (window.L && window.L.map) {{
-                            const o = window.L.map;
-                            window.L.map = function() {{
-                                const m = o.apply(this, arguments);
-                                window.leafletMap = m;
-                                return m;
-                            }};
-                            clearInterval(c);
-                        }}
-                    }}, 20);
-                }})();
-
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
-                const all = Array.from(container.getElementsByTagName('script'));
-                const ext = all.filter(s => s.src);
-                const inl = all.filter(s => !s.src);
+                const scripts = Array.from(container.getElementsByTagName('script'));
+                const ext = scripts.filter(s => s.src);
+                const inl = scripts.filter(s => !s.src);
 
                 for (let s of ext) {{
-                    await new Promise(r => {{
-                        const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns);
-                    }});
+                    await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
                 }}
                 for (let s of inl) {{
-                    const ns = document.createElement('script'); ns.textContent = s.textContent; document.body.appendChild(ns);
+                    const ns = document.createElement('script');
+                    let code = s.textContent;
+                    // SURGERY: Force global assignment
+                    code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
+                    ns.textContent = code;
+                    document.body.appendChild(ns);
                 }}
-                renderList(md);
+                setTimeout(() => {{ if(window.leafletMap) window.leafletMap.invalidateSize(); renderList(md); }}, 300);
             }} else alert("Wrong Password");
         }}
         function renderList(list) {{
             const container = document.getElementById('job-list');
-            document.getElementById('count').innerText = list.length;
-            container.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},'${{j.n.replace(/'/g,"\\'")}}',this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
+            container.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
         }}
         function filterJobs(v) {{
-            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()));
+            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (window.leafletMap) window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
         }}
-        function focusJob(lat, lon, n, el) {{
+        function focusJob(lat, lon, el) {{
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
-            if (lat === null || !window.leafletMap) return;
+            if (!lat || !window.leafletMap) return;
             window.leafletMap.flyTo([lat, lon], 15);
             setTimeout(() => {{ window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
         }}
@@ -223,7 +209,7 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Done! Sequential Fix at {O1}")
+    print(f"Done! Surgery Fix at {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())
