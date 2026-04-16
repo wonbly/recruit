@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+.vscode/
+.idea/
+*.log
+
+# Original files to hide from Public repo
+saramin_*.py
+saramin_*.csv
+saramin_*.html
+check_db_status.py
+debug_*.py
+diagnose_db.py
+inspect_saramin.py
+job_*.py
+research_*.py
+test_*.py
+pk_info.txt
+refresh_map.py
