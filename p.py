@@ -44,7 +44,7 @@ def f_ld():
     return d, g
 
 async def f_list(p, s_ids):
-    print("🚀 Scanning NEW Category List (Regex Mode)...")
+    print("Scanning NEW Category List (Smart Mode)...")
     nj = []
     # Scan up to 12 pages for 1,000+ items
     for i in range(1, 13):
@@ -83,7 +83,7 @@ async def f_list(p, s_ids):
 
 async def f_deep(jobs):
     if not jobs: return []
-    print(f"📡 Deep scanning {len(jobs)} items with {W1} workers...")
+    print(f"Deep scanning {len(jobs)} items with {W1} workers...")
     res = []
     async with async_playwright() as p:
         b = await p.chromium.launch(headless=True)
@@ -236,7 +236,7 @@ def f_map(df, g):
 
 async def main():
     # RESET DB as requested for the 1,000 new jobs
-    print("🧹 Cleaning database for fresh 1,000-job scrape...")
+    print("Cleaning database for fresh 1,000-job scrape...")
     d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
     d.to_csv(D1, index=False, encoding='utf-8-sig')
     
