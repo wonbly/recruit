@@ -98,7 +98,7 @@ def f_encrypt(data, pw):
     key = hashlib.sha256(pw.encode()).digest()
     data_bytes = data.encode('utf-8')
     res = bytearray()
-    for i in range(len(data_bytes)): res.append(data_bytes[i] ^ key[i % key.length])
+    for i in range(len(data_bytes)): res.append(data_bytes[i] ^ key[i % len(key)])
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
