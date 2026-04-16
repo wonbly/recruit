@@ -215,7 +215,19 @@ def f_map(df, g):
                 const container = document.getElementById('content'); container.innerHTML = decoded;
                 const scripts = container.getElementsByTagName('script');
                 for (let s of scripts) {{ const ns = document.createElement('script'); if (s.src) ns.src = s.src; else ns.textContent = s.textContent; document.body.appendChild(ns); }}
-                setTimeout(() => {{ for (let k in window) {{ if (k.startsWith('map_') && window[k] instanceof L.Map) {{ leafletMap = window[k]; break; }} }} }}, 500);
+                // Find the leaflet map object more robustly
+                let attempts = 0;
+                const findMap = setInterval(() => {
+                    attempts++;
+                    for (let key in window) {
+                        if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {
+                            leafletMap = window[key];
+                            clearInterval(findMap);
+                            break;
+                        }
+                    }
+                    if (attempts > 20) clearInterval(findMap);
+                }, 500);
             }} else {{ document.getElementById('error-msg').innerText = "Wrong Password"; }}
         }}
         function handleSearch(val) {{
@@ -227,11 +239,28 @@ def f_map(df, g):
                 list.style.display = 'block';
             }} else list.style.display = 'none';
         }}
-        function goToMarker(lat, lon, name) {{
+        function goToMarker(lat, lon, name) {
+            if (!leafletMap) {
+                for (let key in window) {
+                    if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {
+                        leafletMap = window[key];
+                        break;
+                    }
+                }
+            }
+            if (!leafletMap) return;
             document.getElementById('suggestions').style.display = 'none';
-            leafletMap.flyTo([lat, lon], 14);
-            leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const ll = l.getLatLng(); if (Math.abs(ll.lat-lat)<0.0001) setTimeout(()=>l.openPopup(), 1600); }} }});
-        }}
+            leafletMap.flyTo([lat, lon], 15, { duration: 1.5 });
+            
+            setTimeout(() => {
+                leafletMap.eachLayer(l => {
+                    const ll = l.getLatLng ? l.getLatLng() : null;
+                    if (ll && Math.abs(ll.lat-lat)<0.001 && Math.abs(ll.lng-lon)<0.001) {
+                        if (l.openPopup) l.openPopup();
+                    }
+                });
+            }, 1600);
+        }
     </script>
 </body>
 </html>

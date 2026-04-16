@@ -217,14 +217,19 @@ def f_map(df, g):
                             document.body.appendChild(ns);
                         }}
                         
-                        // Find the leaflet map object
-                        setTimeout(() => {{
+                        // Find the leaflet map object more robustly
+                        let attempts = 0;
+                        const findMap = setInterval(() => {{
+                            attempts++;
                             for (let key in window) {{
-                                if (key.startsWith('map_') && window[key] instanceof L.Map) {{
+                                if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{
                                     leafletMap = window[key];
+                                    console.log("Map found:", key);
+                                    clearInterval(findMap);
                                     break;
                                 }}
                             }}
+                            if (attempts > 20) clearInterval(findMap);
                         }}, 500);
                     }}, 500);
                 }} else {{
@@ -264,19 +269,33 @@ def f_map(df, g):
         }}
 
         function goToMarker(lat, lon, name) {{
-            if (!leafletMap) return;
-            document.getElementById('suggestions').style.display = 'none';
-            leafletMap.flyTo([lat, lon], 14, {{ duration: 1.5 }});
-            
-            // Find marker in Leaflet's layers to open popup
-            leafletMap.eachLayer(function(layer) {{
-                if (layer instanceof L.Marker) {{
-                    const ll = layer.getLatLng();
-                    if (Math.abs(ll.lat - lat) < 0.0001 && Math.abs(ll.lng - lon) < 0.0001) {{
-                        setTimeout(() => layer.openPopup(), 1600);
+            console.log("Navigating to:", name, lat, lon);
+            if (!leafletMap) {{
+                for (let key in window) {{
+                    if (key.startsWith('map_') && window[key] && typeof window[key].flyTo === 'function') {{
+                        leafletMap = window[key];
+                        break;
                     }}
                 }}
-            }});
+            }}
+            if (!leafletMap) {{
+                alert("지도를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+                return;
+            }}
+            document.getElementById('suggestions').style.display = 'none';
+            leafletMap.flyTo([lat, lon], 15, {{ duration: 1.5 }});
+            
+            // Find marker in Leaflet's layers to open popup
+            setTimeout(() => {{
+                leafletMap.eachLayer(function(layer) {{
+                    if (layer instanceof L.Marker || (layer.options && layer.options.icon)) {{
+                        const ll = layer.getLatLng ? layer.getLatLng() : null;
+                        if (ll && Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lon) < 0.001) {{
+                            layer.openPopup();
+                        }}
+                    }}
+                }});
+            }}, 1600);
         }}
 
         document.getElementById('pw').addEventListener('keypress', e => {{ if (e.key === 'Enter') unlock(); }});
