@@ -26,9 +26,7 @@ def f_sal(t):
     try:
         n = [int(i.replace(',', '')) for i in re.findall(r'[\d,]+', t)]
         if not n: return ""
-        a = sum(n) / len(n)
-        if a < 1000: return ""
-        m = (a * 0.9) / 12
+        a = sum(n) / len(n); m = (a * 0.9) / 12
         return f"{int(m):,}만원"
     except: return ""
 
@@ -103,28 +101,20 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building final map (Ultimate Fix) - {now}...")
+    print(f"Building map with Sequential Fix - {now}...")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
-        
+    
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
 
     for i, (_, r) in enumerate(df.iterrows()):
-        a = str(r["c4"])
-        if a and a not in g:
-            try:
-                cl = re.sub(r'\(.*?\)', '', a); cl = re.sub(r'\d+층|\d+호', '', cl).split(',')[0].strip()
-                loc = geocoder.geocode(cl)
-                if loc: g[a] = (loc.latitude, loc.longitude)
-                else: g[a] = None
-            except: pass
-        co = g.get(a); t = r["c2"]; cor = r["c1"]
+        a = str(r["c4"]); co = g.get(a); t = r["c2"]; cor = r["c1"]
         search_data.append({{"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]}})
         if co:
-            h = f'''<div style="font-family:Noto Sans KR,sans-serif;padding:5px"><h4>{cor}</h4><p>{t}</p><p>💰 {r["c5"]}</p></div>'''
+            h = f'''<div style="font-family:Noto Sans KR,sans-serif;padding:5px"><h4>{cor}</h4><p>{t}</p></div>'''
             folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor).add_to(m)
 
     tmp = m._repr_html_()
@@ -134,14 +124,14 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Ultimate Fix</title>
+    <title>Recruit Map | Sequential Fix</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
         body, html {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; margin: 0; padding: 0; height: 100vh; overflow: hidden; display: flex; }}
-        #main-layout {{ display: flex; width: 100%; height: 100vh; }}
+        #main-layout {{ width: 100%; height: 100vh; display: none; }}
         #sidebar {{ width: 400px; min-width: 400px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; }}
         #job-list {{ flex-grow: 1; overflow-y: auto; padding: 10px; }}
         .job-card {{ padding: 16px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; margin-bottom: 5px; }}
@@ -153,13 +143,13 @@ def f_map(df, g):
 <body>
     <div id="login" style="position:fixed;inset:0;background:var(--bg);z-index:2000;display:flex;justify-content:center;align-items:center;">
         <div style="background:white;padding:3rem;border-radius:20px;text-align:center;">
-            <h2>RECRUIT MAP</h2>
-            <input type="password" id="pw" placeholder="PASSWORD" style="width:100%;padding:10px;margin:20px 0;">
-            <button style="width:100%;background:var(--primary);color:white;border:none;padding:10px;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
-            <div style="margin-top: 25px; font-size: 0.75rem; color: #aaa;">최근 업데이트: {now}</div>
+            <h2>RECRUIT MAP</h2><p>PASSWORD: 250222</p>
+            <input type="password" id="pw" style="width:100%;padding:10px;margin:20px 0;">
+            <button style="width:100%;background:var(--primary);color:white;padding:10px;border:none;border-radius:8px;cursor:pointer;" onclick="unlock()">LOGIN</button>
+            <div style="margin-top:20px;font-size:0.7rem;color:#999;">UPDATE: {now}</div>
         </div>
     </div>
-    <div id="main-layout" style="display:none;">
+    <div id="main-layout">
         <div id="sidebar">
             <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;"></div>
             <div style="padding:10px 20px; font-size: 0.8rem; color: #666;">건수: <span id="count">0</span></div>
@@ -181,14 +171,33 @@ def f_map(df, g):
                 document.getElementById('login').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
                 
-                // HOOK L.map
-                const hook = document.createElement('script');
-                hook.textContent = `(function(){{const c=setInterval(()=>{{if(window.L&&window.L.map){{const o=window.L.map;window.L.map=function(){{const m=o.apply(this,arguments);window.leafletMap=m;return m;}};clearInterval(c);}}}},50);}})();`;
-                document.head.appendChild(hook);
+                (function() {{
+                    const c = setInterval(() => {{
+                        if (window.L && window.L.map) {{
+                            const o = window.L.map;
+                            window.L.map = function() {{
+                                const m = o.apply(this, arguments);
+                                window.leafletMap = m;
+                                return m;
+                            }};
+                            clearInterval(c);
+                        }}
+                    }}, 20);
+                }})();
 
-                document.getElementById('content').innerHTML = decoded;
-                for (let s of document.getElementById('content').getElementsByTagName('script')) {{
-                    const ns = document.createElement('script'); if (s.src) ns.src = s.src; else ns.textContent = s.textContent; document.body.appendChild(ns);
+                const container = document.getElementById('content');
+                container.innerHTML = decoded;
+                const all = Array.from(container.getElementsByTagName('script'));
+                const ext = all.filter(s => s.src);
+                const inl = all.filter(s => !s.src);
+
+                for (let s of ext) {{
+                    await new Promise(r => {{
+                        const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns);
+                    }});
+                }}
+                for (let s of inl) {{
+                    const ns = document.createElement('script'); ns.textContent = s.textContent; document.body.appendChild(ns);
                 }}
                 renderList(md);
             }} else alert("Wrong Password");
@@ -199,11 +208,11 @@ def f_map(df, g):
             container.innerHTML = list.map(j => `<div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},'${{j.n.replace(/'/g,"\\'")}}',this)"><b>${{j.n}}</b><br><small>${{j.t}}</small></div>`).join('');
         }}
         function filterJobs(v) {{
-            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
+            const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (window.leafletMap) window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
         }}
-        function focusJob(lat, lon, name, el) {{
+        function focusJob(lat, lon, n, el) {{
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
             if (lat === null || !window.leafletMap) return;
             window.leafletMap.flyTo([lat, lon], 15);
@@ -214,7 +223,7 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Done! Ultimate Fix Version at {O1}")
+    print(f"Done! Sequential Fix at {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())

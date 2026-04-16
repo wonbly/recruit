@@ -36,13 +36,13 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building sidebar-integrated map (Ultimate Fix) - {now}...")
+    print(f"Building map with Sequential Script Loading - {now}...")
     df['c4'] = df['c4'].fillna('')
-    # DEDUPLICATE: Keep unique jobs
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
     
     search_data = []
+    # Force Cartesian tiles or light theme
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     
     for i, (_, r) in enumerate(df.iterrows()):
@@ -70,7 +70,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Ultimate Fix</title>
+    <title>Recruit Map | Sequential Fix</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -89,6 +89,7 @@ def f_map(df, g):
         .job-card .corp {{ font-size: 0.85rem; font-weight: 600; color: #5f6368; }}
         .job-card .title {{ font-size: 0.95rem; font-weight: 500; margin: 2px 0; }}
         #map-area {{ flex-grow: 1; position: relative; }}
+        #loader {{ display:none; position:absolute; inset:0; background:rgba(255,255,255,0.8); z-index:100; justify-content:center; align-items:center; flex-direction:column; }}
     </style>
 </head>
 <body>
@@ -107,7 +108,10 @@ def f_map(df, g):
             <div style="padding:10px 20px; font-size:0.8rem; color:#666; border-bottom:1px solid #eee;">총 <span id="count">0</span>건</div>
             <div id="job-list"></div>
         </div>
-        <div id="map-area"><div id="content" style="width:100%; height:100%;"></div></div>
+        <div id="map-area">
+            <div id="loader"><b>지도를 로딩 중입니다...</b><p>잠시만 기다려 주세요.</p></div>
+            <div id="content" style="width:100%; height:100%;"></div>
+        </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
@@ -123,39 +127,54 @@ def f_map(df, g):
             if (decoded.includes('folium')) {{
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
+                document.getElementById('loader').style.display = 'flex';
                 
-                // HOOK L.map BEFORE injecting scripts
-                const hookScript = document.createElement('script');
-                hookScript.textContent = `
-                    (function() {{
-                        const checkL = setInterval(() => {{
-                            if (window.L && window.L.map) {{
-                                const originalLMap = window.L.map;
-                                window.L.map = function() {{
-                                    const mapInstance = originalLMap.apply(this, arguments);
-                                    window.leafletMap = mapInstance;
-                                    console.log("Leaflet Map Captured.");
-                                    return mapInstance;
-                                }};
-                                clearInterval(checkL);
-                            }}
-                        }}, 50);
-                    }})();
-                `;
-                document.head.appendChild(hookScript);
+                // 1. Capture Map Object Hook
+                (function() {{
+                    const checkInterval = setInterval(() => {{
+                        if (window.L && window.L.map) {{
+                            const originalLMap = window.L.map;
+                            window.L.map = function() {{
+                                const m = originalLMap.apply(this, arguments);
+                                window.leafletMap = m;
+                                return m;
+                            }};
+                            clearInterval(checkInterval);
+                        }}
+                    }}, 20);
+                }})();
 
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
-                const scripts = container.getElementsByTagName('script');
-                for (let s of scripts) {{
+                
+                // 2. Sequential Script Loading Strategy
+                const allScripts = Array.from(container.getElementsByTagName('script'));
+                const externalScripts = allScripts.filter(s => s.src);
+                const inlineScripts = allScripts.filter(s => !s.src);
+
+                // Load all external scripts one by one
+                for (let s of externalScripts) {{
+                    await new Promise((resolve) => {{
+                        const ns = document.createElement('script');
+                        ns.src = s.src;
+                        ns.onload = resolve;
+                        ns.onerror = resolve;
+                        document.body.appendChild(ns);
+                    }});
+                }}
+
+                // Finally run all inline scripts (this is where the map is actually created)
+                for (let s of inlineScripts) {{
                     const ns = document.createElement('script');
-                    if (s.src) ns.src = s.src;
-                    else ns.textContent = s.textContent;
+                    ns.textContent = s.textContent;
                     document.body.appendChild(ns);
                 }}
+
+                document.getElementById('loader').style.display = 'none';
                 renderList(markersData);
             }} else {{ document.getElementById('err').innerText = "Wrong Password"; }}
         }}
+
         function renderList(list) {{
             const container = document.getElementById('job-list');
             document.getElementById('count').innerText = list.length;
@@ -163,10 +182,10 @@ def f_map(df, g):
                 <div class="job-card" onclick="focusJob(${{j.l ? j.l[0] : 'null'}}, ${{j.l ? j.l[1] : 'null'}}, '${{j.n.replace(/'/g, "\\'")}}', this)">
                     <div class="corp">${{j.n}}</div>
                     <div class="title">${{j.t}}</div>
-                    ${{!j.l ? '<div style="color:red; font-size:0.7rem;">[지도 미표시 공고]</div>' : ''}}
                 </div>
             `).join('');
         }}
+
         function filterJobs(val) {{
             const v = val.toLowerCase();
             const filtered = markersData.filter(m => m.n.toLowerCase().includes(v) || m.t.toLowerCase().includes(v));
@@ -180,11 +199,16 @@ def f_map(df, g):
                 }});
             }}
         }}
+
         function focusJob(lat, lon, name, el) {{
             document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active'));
             el.classList.add('active');
-            if (!lat || !window.leafletMap) return;
-            window.leafletMap.flyTo([lat, lon], 15);
+            if (!lat || !window.leafletMap) {{
+                // Try to find map one more time if missing
+                if(!window.leafletMap) console.warn("Map not initialized yet");
+                return;
+            }}
+            window.leafletMap.flyTo([lat, lon], 15, {{ duration: 1.5 }});
             setTimeout(() => {{
                 window.leafletMap.eachLayer(layer => {{
                     if (layer.getLatLng && Math.abs(layer.getLatLng().lat - lat) < 0.005) layer.openPopup();
@@ -198,7 +222,7 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Ultimate Fix Version Created at {O1}")
+    print(f"Done! Sequential Fix Version Created at {O1}")
 
 if __name__ == "__main__":
     d, g = f_ld()
