@@ -10,12 +10,12 @@ from geopy.geocoders import ArcGIS
 import folium
 from datetime import datetime
 
-# [System Config] - Pure Leaflet Engine Version
-C1 = "https://www.saramin.co.kr/zf_user/search?loc_cd=102250%2C102230%2C102240%2C102260%2C102220&cat_mcls=16%2C14&company_cd=0%2C1%2C2%2C3%2C4%2C5%2C6%2C7%2C9%2C10&search_optional_item=y&search_done=y&panel_count=y&recruitPageCount=40&recruitSort=reg_dt"
+# [System Config] - Category List Version (1,000+ jobs)
+C1 = "https://www.saramin.co.kr/zf_user/jobs/list/job-category?cat_mcls=16%2C14&loc_cd=102230%2C102240%2C102250%2C102260%2C102220%2C102520%2C102530%2C102540%2C102550%2C102510%2C102390&recruitSort=reg_dt"
 D1 = "d.csv"
 D2 = "c.csv"
 O1 = "index.html"
-W1 = 4 
+W1 = 5 # Parallel threads
 P1 = "250222"
 
 def f_idx(u):
@@ -47,30 +47,42 @@ def f_ld():
 async def f_list(p, s_ids):
     print("Scanning list...")
     nj = []
-    for i in range(1, 4):
-        u = f"{C1}/zf_user/search/recruit?loc_cd=102250%2C102230%2C102240%2C102260%2C102220&recruitPage={i}"
+    # Scan up to 12 pages for 1,000+ items (80-100 per page)
+    for i in range(1, 13):
+        u = f"{C1}&recruitPage={i}&recruitPageCount=100"
         try:
             await p.goto(u, timeout=30000, wait_until="load")
-            await p.wait_for_selector('.item_recruit', timeout=5000)
+            await p.wait_for_selector('.item', timeout=5000)
         except: break
-        items = await p.query_selector_all('.item_recruit')
+        
+        items = await p.query_selector_all('.item')
         for it in items:
-            j_el = await it.query_selector('.job_tit a')
-            l = await j_el.get_attribute('href')
-            if not l.startswith('http'): l = 'https://www.saramin.co.kr' + l
-            jid = f_idx(l)
-            if jid in s_ids: continue
-            
-            # Smart Scrape: Get basic info + location FROM THE LIST
-            cor = (await (await it.query_selector('.corp_name a')).inner_text()).strip()
-            tit = (await j_el.inner_text()).strip()
-            
-            # Location is in .job_condition span[0] usually
-            conds = await it.query_selector_all('.job_condition span')
-            loc_txt = ""
-            if conds: loc_txt = (await conds[0].inner_text()).strip()
-            
-            nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc_txt})
+            try:
+                # New selectors for job-category page
+                j_el = await it.query_selector('.job_tit a')
+                if not j_el: continue
+                l = await j_el.get_attribute('href')
+                if not l.startswith('http'): l = 'https://www.saramin.co.kr' + l
+                jid = f_idx(l)
+                if jid in s_ids: continue
+                
+                cor_el = await it.query_selector('.corp_name a')
+                cor = (await cor_el.inner_text()).strip() if cor_el else "Unknown"
+                tit = (await j_el.inner_text()).strip()
+                
+                # Location/Condition info
+                conds = await it.query_selector_all('.job_condition span')
+                loc_txt = ""
+                if conds: loc_txt = (await conds[0].inner_text()).strip()
+                
+                sal_txt = ""
+                if len(conds) > 1: sal_txt = (await conds[1].inner_text()).strip()
+                
+                nj.append({
+                    "c1": cor, "c2": tit, "c3": l, "id": jid, 
+                    "c4": loc_txt, "c5": sal_txt
+                })
+            except: continue
     return nj
 
 async def f_deep(jobs):
