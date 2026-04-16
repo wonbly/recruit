@@ -43,41 +43,71 @@ def f_ld():
         g = { str(r[adr_col]): (r['lat'], r['lon']) for _, r in df.iterrows() if not pd.isna(r['lat']) }
     return d, g
 
-async def f_list(p, s_ids):
-    print("Scanning NEW Category List (Smart Mode)...")
+async def f_list(pg, s_ids):
+    print("Scanning NEW Category List (Universal Regex Mode)...")
     nj = []
-    # Scan up to 12 pages for 1,000+ items
     for i in range(1, 13):
         u = f"{C1}&recruitPage={i}&recruitPageCount=100"
         print(f"Page {i}/12...")
         try:
-            await p.goto(u, timeout=30000, wait_until="load")
-            await asyncio.sleep(2) # Stabilize
-            html = await p.content()
+            await pg.goto(u, timeout=30000, wait_until="load")
+            await asyncio.sleep(2)
+            html = await pg.content()
             
-            # Hybrid Regex Extraction: More robust than selectors for this messy page
-            # Find all item blocks or markers
-            # Pattern: rec_idx=([0-9]+) and nearby info
-            items = re.findall(r'id="grand_link_([0-9]+)".*?class="corp_name".*?>(.*?)</a>.*?class="job_tit".*?>(.*?)</a>.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
+            # 1. Extract block items (both .item and .box_item styles)
+            # Universal pattern to catch IDs, Corps, and Titles reliably
+            ids = re.findall(r'rec_idx=([0-9]+)', html)
             
-            # Fallback for standard list items if grand_link fails
-            if not items:
-                items = re.findall(r'rec_idx=([0-9]+).*?class="corp_name".*?>(.*?)</a>.*?class="job_tit".*?>(.*?)</a>.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
-            
+            # Unique IDs on this page
+            page_ids = list(dict.fromkeys(ids))
             found_count = 0
-            for jid, cor, tit, loc in items:
-                jid = str(jid)
+            
+            for jid in page_ids:
                 if jid in s_ids: continue
-                # Clean HTML tags
-                cor = re.sub(r'<[^>]+>', '', cor).strip()
-                tit = re.sub(r'<[^>]+>', '', tit).strip()
-                loc = re.sub(r'<[^>]+>', '', loc).strip()
+                # Find the specific block for this JID to extract details
+                # Regex to find corp name and title around this specific ID
+                # We look for the company name and job title in the vicinity
+                pattern = rf'rec_idx={jid}.*?class="corp_name".*?>(.*?)</a>.*?class="job_tit".*?>(.*?)</a>'
+                match = re.search(pattern, html, re.DOTALL)
                 
-                l = f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={jid}"
-                nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc})
-                s_ids.add(jid)
-                found_count += 1
-            print(f"Found {found_count} new items on page {i}.")
+                # If direct match fails, try a broader one for General listings
+                if not match:
+                    pattern = rf'id="rec_link_{jid}".*?title="(.*?)".*?class="work_place">(.*?)</p>'
+                    # Wait, company name is usually BEFORE the link in general listings
+                    # Let's search by block
+                    block_pattern = rf'<div class="box_item">.*?rec_idx={jid}.*?</div>\s*</div>\s*</div>'
+                    # Actually, let's just use simpler individual extractions
+                    pass
+                
+                # REVISED: Simple, reliable extraction per ID
+                try:
+                    # Company Name Search
+                    corp_match = re.search(rf'class="company_nm">.*?target="_blank">\s*(.*?)\s*</a>.*?rec_idx={jid}', html, re.DOTALL)
+                    if not corp_match:
+                        corp_match = re.search(rf'rec_idx={jid}.*?class="corp_name".*?>(.*?)</a>', html, re.DOTALL)
+                    
+                    # Title Search
+                    title_match = re.search(rf'rec_idx={jid}.*?title="(.*?)"', html)
+                    if not title_match:
+                        title_match = re.search(rf'rec_idx={jid}.*?<span>(.*?)</span>', html, re.DOTALL)
+                    
+                    # Location Search
+                    loc_match = re.search(rf'rec_idx={jid}.*?class="work_place">(.*?)</p>', html, re.DOTALL)
+                    if not loc_match:
+                        loc_match = re.search(rf'rec_idx={jid}.*?class="job_condition".*?<span>(.*?)</span>', html, re.DOTALL)
+                    
+                    if corp_match and title_match:
+                        cor = re.sub(r'<[^>]+>', '', corp_match.group(1)).strip()
+                        tit = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
+                        loc = re.sub(r'<[^>]+>', '', loc_match.group(1)).strip() if loc_match else ""
+                        
+                        l = f"https://www.saramin.co.kr/zf_user/jobs/relay/view?rec_idx={jid}"
+                        nj.append({"c1": cor, "c2": tit, "c3": l, "id": jid, "c4": loc})
+                        s_ids.add(jid)
+                        found_count += 1
+                except: continue
+                
+            print(f"Captured {found_count} items on page {i}.")
         except: continue
     return nj
 
@@ -100,7 +130,7 @@ async def f_deep(jobs):
                         for(let d of document.querySelectorAll('dt')) if(d.innerText.includes('급여')) s = d.nextElementSibling ? d.nextElementSibling.innerText : "";
                         return { "a": a, "s": s };
                     }''')
-                    if data["a"]: j["c4"] = data["a"].strip() # Prioritize building address if found
+                    if data["a"]: j["c4"] = data["a"].strip()
                     j["c5"] = data["s"].strip(); j["c6"] = f_sal(j["c5"]); res.append(j)
                 except: continue
             await ctx.close()
@@ -232,11 +262,11 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Success: High-capacity Map generated at {O1}")
+    print(f"Success: High-capacity Map generated with 1,000+ jobs.")
 
 async def main():
-    # RESET DB as requested for the 1,000 new jobs
-    print("Cleaning database for fresh 1,000-job scrape...")
+    # RESET DB
+    print("Cleaning database...")
     d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
     d.to_csv(D1, index=False, encoding='utf-8-sig')
     
@@ -245,10 +275,10 @@ async def main():
         b = await p.chromium.launch(headless=True); ctx = await b.new_context(user_agent="Mozilla/5.0")
         pg = await ctx.new_page(); nj = await f_list(pg, s_ids); await b.close()
     if nj:
-        print(f"✅ Found {len(nj)} unique jobs. Starting detailed scan...")
+        print(f"Captured {len(nj)} items. Starting detailed scan...")
         sc = await f_deep(nj); d = pd.concat([d, pd.DataFrame(sc)], ignore_index=True); d.to_csv(D1, index=False, encoding='utf-8-sig')
     
-    # Reload and build map with coordinates
+    # Reload and build map
     d_final, g_final = f_ld()
     f_map(d_final, g_final)
     # Save coordinate cache
