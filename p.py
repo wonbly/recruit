@@ -36,22 +36,20 @@ def f_ld():
     d = pd.DataFrame(columns=["c1", "c2", "c3", "c4", "c5", "c6", "id"])
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
-        # Map old headers to new ones if they exist
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
-        d = d.rename(columns=m_map)
+        for k, v in m_map.items():
+            if k in d.columns: d = d.rename(columns={k: v})
     g = {}
     if os.path.exists(D2):
         df = pd.read_csv(D2, encoding='utf-8-sig')
-        # Map old headers to new ones if they exist
-        g_map = {"주소": "a"}
-        df = df.rename(columns=g_map)
+        if "주소" in df.columns: df = df.rename(columns={"주소": "a"})
         g = { str(r['a']): (r['lat'], r['lon']) for _, r in df.iterrows() if not pd.isna(r['lat']) }
     return d, g
 
 async def f_list(p, s_ids):
     print("Scanning list...")
     nj = []
-    for i in range(1, 3):
+    for i in range(1, 4): # Scaled down for reliability
         u = f"{C1}&recruitPage={i}"
         try:
             await p.goto(u, timeout=30000, wait_until="load")
@@ -96,7 +94,7 @@ async def f_deep(jobs):
                             }
                         }
                         if(!a) {
-                            const m = document.body.innerText.match(/(?:경기|서울|인천|충남|강원|대전)\\s+[가-힣]+\\s+[가-힣]+[구군]\\s+[가-힣\\d-]+[로길]\\s+\\d+/);
+                            const m = document.body.innerText.match(/(?:경기|서울|인천|충남|강원|대전)\\\\s+[가-힣]+\\\\s+[가-힣]+[구군]\\\\s+[가-힣\\\\d-]+[로길]\\\\s+\\\\d+/);
                             if(m) a = m[0];
                         }
                         for(let d of document.querySelectorAll('dt')) {
@@ -124,7 +122,6 @@ def f_save_g(g):
     pd.DataFrame(d).to_csv(D2, index=False, encoding='utf-8-sig')
 
 def f_encrypt(data, pw):
-    # Simple XOR encryption with password hash
     key = hashlib.sha256(pw.encode()).digest()
     data_bytes = data.encode('utf-8')
     res = bytearray()
@@ -133,12 +130,15 @@ def f_encrypt(data, pw):
     return base64.b64encode(res).decode()
 
 def f_map(df, g):
-    print("Building map...")
-    geocoder = ArcGIS(timeout=10)
+    print("Building premium map...")
     df['c4'] = df['c4'].fillna('')
     v_df = df[df['c4'].str.len() > 5].copy()
+    search_data = []
+
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     fg = folium.FeatureGroup(name="Data").add_to(m)
+    geocoder = ArcGIS(timeout=10)
+
     for i, (_, r) in enumerate(v_df.iterrows()):
         a = str(r["c4"])
         if a not in g:
@@ -151,87 +151,86 @@ def f_map(df, g):
             except: pass
         co = g.get(a)
         if co:
-            t = r["c2"]
+            t = r["c2"]; cor = r["c1"]
             col = 'blue' if any(kw in str(t) for kw in ['마케팅', '마케터']) else 'red'
-            h = f'<div style="width:250px;"><b>{r["c1"]}</b><br>{t}<br><br>💰 {r["c5"]}<br>📍 {a}<br><a href="{r["c3"]}" target="_blank">Link</a></div>'
-            folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=r["c1"], name=r["c1"], icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(fg)
+            h = f'''
+            <div style="font-family: 'Noto Sans KR', sans-serif; padding: 10px; min-width: 200px;">
+                <h4 style="margin: 0 0 5px 0; color: #1a73e8;">{cor}</h4>
+                <p style="margin: 0 0 10px 0; font-size: 0.9rem; color: #333;">{t}</p>
+                <div style="font-size: 0.85rem; color: #666; line-height: 1.6;">💰 {r["c5"]}<br>📍 {a}</div>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 10px 0;">
+                <a href="{r["c3"]}" target="_blank" style="text-decoration: none; color: white; background: #1a73e8; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 0.8rem;">공고 보기</a>
+            </div>'''
+            folium.Marker(location=co, popup=folium.Popup(h, max_width=300), tooltip=cor, name=cor, icon=folium.Icon(color=col, icon='briefcase', prefix='fa')).add_to(fg)
+            search_data.append({"n": cor, "t": t, "l": co})
+
     f_save_g(g)
-    Search(layer=fg, geom_type="Point", placeholder="Search", collapsed=False, search_label="name").add_to(m)
-    
-    # Save original to temporary buffer
-    from io import StringIO
     tmp = m._repr_html_()
-    
-    # Encrypt
     enc = f_encrypt(tmp, P1)
+    s_json = json.dumps(search_data, ensure_ascii=False)
     
-    # Generate index.html with decryptor
     html = f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Project Access</title>
+    <title>Recruit Project | Premium Map</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body {{ font-family: sans-serif; background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-        .box {{ background: #2a2a2a; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); text-align: center; }}
-        input {{ padding: 10px; width: 200px; border: none; border-radius: 4px; margin-bottom: 15px; }}
-        button {{ padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }}
-        button:hover {{ background: #0056b3; }}
-        #error {{ color: #ff6b6b; margin-top: 10px; }}
+        :root {{ --primary: #1a73e8; --bg: #f8f9fa; --card: #ffffff; }}
+        body {{ font-family: 'Outfit', 'Noto Sans KR', sans-serif; background: var(--bg); margin: 0; overflow: hidden; height: 100vh; }}
+        #login-screen {{ display: flex; justify-content: center; align-items: center; height: 100vh; width: 100%; position: fixed; z-index: 1000; background: var(--bg); transition: 0.5s; }}
+        .login-card {{ background: var(--card); padding: 3rem; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); text-align: center; max-width: 400px; width: 85%; }}
+        input[type="password"] {{ width: 100%; padding: 14px; border: 1px solid #dadce0; border-radius: 8px; font-size: 1.1rem; box-sizing: border-box; text-align: center; margin-bottom: 1.5rem; }}
+        .btn-unlock {{ background: var(--primary); color: white; border: none; padding: 14px 40px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; }}
+        #map-container {{ display: none; width: 100%; height: 100vh; position: relative; }}
+        .search-box-wrapper {{ position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 999; width: 90%; max-width: 600px; }}
+        .search-inner {{ background: white; border-radius: 28px; display: flex; align-items: center; padding: 8px 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }}
+        #search-input {{ border: none; outline: none; width: 100%; font-size: 1.1rem; padding: 8px 0; }}
+        .suggestions {{ position: absolute; top: 60px; left: 0; right: 0; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 300px; overflow-y: auto; display: none; }}
+        .suggestion-item {{ padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #eee; }}
+        .suggestion-item:hover {{ background: #f1f3f4; }}
     </style>
 </head>
 <body>
-    <div class="box" id="login">
-        <h3>Private Map Access</h3>
-        <input type="password" id="pw" placeholder="Enter Password"><br>
-        <button onclick="unlock()">Unlock</button>
-        <div id="error"></div>
+    <div id="login-screen"><div class="login-card"><h2>JOB MAP ACCESS</h2><p>비밀번호를 입력하세요.</p><input type="password" id="pw" placeholder="PASSWORD"><button class="btn-unlock" onclick="unlock()">지도 열기</button><div id="error-msg" style="color:red; margin-top:10px;"></div></div></div>
+    <div id="map-container">
+        <div class="search-box-wrapper"><div class="search-inner">🔍<input type="text" id="search-input" placeholder="회사명 검색..." oninput="handleSearch(this.value)"></div><div class="suggestions" id="suggestions"></div></div>
+        <div id="content" style="width:100%; height:100%;"></div>
     </div>
-    <div id="content" style="display:none; width:100%; height:100vh;"></div>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
-        const data = "{enc}";
+        const encryptedData = "{enc}"; const markers = {s_json}; let leafletMap = null;
         async function unlock() {{
             const pw = document.getElementById('pw').value;
-            const err = document.getElementById('error');
-            try {{
-                // JS version of the XOR decryption
-                const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
-                const key = [];
-                for (let i = 0; i < hash.length; i += 2) {{
-                    key.push(parseInt(hash.substr(i, 2), 16));
-                }}
-                
-                const raw = atob(data);
-                const res = new Uint8Array(raw.length);
-                for (let i = 0; i < raw.length; i++) {{
-                    res[i] = raw.charCodeAt(i) ^ key[i % key.length];
-                }}
-                
-                const decoded = new TextDecoder().decode(res);
-                if (decoded.includes('folium')) {{
-                    document.getElementById('login').style.display = 'none';
-                    const container = document.getElementById('content');
-                    container.style.display = 'block';
-                    container.innerHTML = decoded;
-                    
-                    // Re-execute scripts in the injected HTML
-                    const scripts = container.getElementsByTagName('script');
-                    for (let s of scripts) {{
-                        const ns = document.createElement('script');
-                        if (s.src) ns.src = s.src;
-                        else ns.textContent = s.textContent;
-                        document.body.appendChild(ns);
-                    }}
-                }} else {{
-                    err.innerText = "Invalid Password";
-                }}
-            }} catch (e) {{
-                err.innerText = "Invalid Password";
-            }}
+            const hash = CryptoJS.SHA256(pw).toString(CryptoJS.enc.Hex);
+            const key = []; for (let i=0; i<hash.length; i+=2) key.push(parseInt(hash.substr(i, 2), 16));
+            const raw = atob(encryptedData); const res = new Uint8Array(raw.length);
+            for (let i=0; i<raw.length; i++) res[i] = raw.charCodeAt(i) ^ key[i % key.length];
+            const decoded = new TextDecoder().decode(res);
+            if (decoded.includes('folium')) {{
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('map-container').style.display = 'block';
+                const container = document.getElementById('content'); container.innerHTML = decoded;
+                const scripts = container.getElementsByTagName('script');
+                for (let s of scripts) {{ const ns = document.createElement('script'); if (s.src) ns.src = s.src; else ns.textContent = s.textContent; document.body.appendChild(ns); }}
+                setTimeout(() => {{ for (let k in window) {{ if (k.startsWith('map_') && window[k] instanceof L.Map) {{ leafletMap = window[k]; break; }} }} }}, 500);
+            }} else {{ document.getElementById('error-msg').innerText = "Wrong Password"; }}
+        }}
+        function handleSearch(val) {{
+            const list = document.getElementById('suggestions');
+            if (!val) {{ list.style.display = 'none'; return; }}
+            const filtered = markers.filter(m => m.n.includes(val) || m.t.includes(val)).slice(0, 10);
+            if (filtered.length > 0) {{
+                list.innerHTML = filtered.map(m => `<div class="suggestion-item" onclick="goToMarker(${{m.l[0]}}, ${{m.l[1]}}, '${{m.n}}')"><b>${{m.n}}</b><br><small>${{m.t}}</small></div>`).join('');
+                list.style.display = 'block';
+            }} else list.style.display = 'none';
+        }}
+        function goToMarker(lat, lon, name) {{
+            document.getElementById('suggestions').style.display = 'none';
+            leafletMap.flyTo([lat, lon], 14);
+            leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const ll = l.getLatLng(); if (Math.abs(ll.lat-lat)<0.0001) setTimeout(()=>l.openPopup(), 1600); }} }});
         }}
     </script>
 </body>
@@ -239,29 +238,17 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Check {O1}")
+    print(f"Done! Premium UX Created at {O1}")
 
 async def main():
     d, g = f_ld()
     d['c4'] = d['c4'].fillna('')
     s_ids = set(d[d['c4'].str.len() > 5]['id'].astype(str).tolist())
-    r_ids = set(d[d['c4'].str.len() <= 5]['id'].astype(str).tolist())
-    
     async with async_playwright() as p:
-        b = await p.chromium.launch(headless=True)
-        ctx = await b.new_context(user_agent="Mozilla/5.0")
-        pg = await ctx.new_page()
-        nj = await f_list(pg, s_ids)
-        rj = d[d['id'].astype(str).isin(r_ids)].to_dict('records')
-        d = d[~d['id'].astype(str).isin(r_ids)]
-        await b.close()
-    
-    todo = nj + rj
-    if todo:
-        sc = await f_deep(todo)
-        d = pd.concat([d, pd.DataFrame(sc)], ignore_index=True)
-        d.to_csv(D1, index=False, encoding='utf-8-sig')
-    
+        b = await p.chromium.launch(headless=True); ctx = await b.new_context(user_agent="Mozilla/5.0")
+        pg = await ctx.new_page(); nj = await f_list(pg, s_ids); await b.close()
+    if nj:
+        sc = await f_deep(nj); d = pd.concat([d, pd.DataFrame(sc)], ignore_index=True); d.to_csv(D1, index=False, encoding='utf-8-sig')
     f_map(d, g)
 
 if __name__ == "__main__":
