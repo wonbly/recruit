@@ -35,8 +35,7 @@ def f_ld():
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
-        for k, v in m_map.items():
-            if k in d.columns: d = d.rename(columns={k: v})
+        for k, v in d.columns: d = d.rename(columns={k: v})
     g = {}
     if os.path.exists(D2):
         df = pd.read_csv(D2, encoding='utf-8-sig')
@@ -101,11 +100,11 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building final map (Surgery Fixed)... - {now}")
+    print(f"Final Fix - Correcting Loader - {now}")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
-    
+        
     search_data = []
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     geocoder = ArcGIS(timeout=10)
@@ -124,9 +123,8 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Surgery Fix</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Recruit Map | Final Fix</title>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {{ --primary: #1a73e8; --bg: #f8f9fa; --sidebar-bg: #fff; --border: #e8eaed; }}
@@ -138,6 +136,7 @@ def f_map(df, g):
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
+        #loader {{ position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:100; display:flex; justify-content:center; align-items:center; flex-direction:column; }}
     </style>
 </head>
 <body>
@@ -154,7 +153,10 @@ def f_map(df, g):
             <div style="padding:20px;border-bottom:1px solid #eee;"><h1>📍 Recruit</h1><input type="text" id="si" placeholder="검색..." oninput="filterJobs(this.value)" style="width:100%;padding:10px;border-radius:24px;border:1px solid #eee;background:#f1f3f4;outline:none;"></div>
             <div id="job-list"></div>
         </div>
-        <div id="map-area"><div id="content" style="width:100%;height:100%;"></div></div>
+        <div id="map-area">
+            <div id="loader" style="display:none;"><b>지도를 로딩 중입니다...</b></div>
+            <div id="content" style="width:100%;height:100%;"></div>
+        </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script>
@@ -169,6 +171,7 @@ def f_map(df, g):
             if (decoded.includes('folium')) {{
                 document.getElementById('login').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
+                document.getElementById('loader').style.display = 'flex';
                 
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
@@ -176,17 +179,24 @@ def f_map(df, g):
                 const ext = scripts.filter(s => s.src);
                 const inl = scripts.filter(s => !s.src);
 
-                for (let s of ext) {{
-                    await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
-                }}
-                for (let s of inl) {{
-                    const ns = document.createElement('script');
-                    let code = s.textContent;
-                    code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
-                    ns.textContent = code;
-                    document.body.appendChild(ns);
-                }}
-                setTimeout(() => {{ if(window.leafletMap) window.leafletMap.invalidateSize(); renderList(md); }}, 300);
+                try {{
+                    for (let s of ext) {{
+                        await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
+                    }}
+                    for (let s of inl) {{
+                        const ns = document.createElement('script');
+                        let code = s.textContent;
+                        code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
+                        ns.textContent = code;
+                        document.body.appendChild(ns);
+                    }}
+                }} catch(e) {{ console.error(e); }}
+
+                setTimeout(() => {{ 
+                    if(window.leafletMap) window.leafletMap.invalidateSize(); 
+                    document.getElementById('loader').style.display = 'none';
+                    renderList(md); 
+                }}, 800);
             }} else alert("Wrong Password");
         }}
         function renderList(list) {{
@@ -199,7 +209,7 @@ def f_map(df, g):
             if (window.leafletMap) window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
         }}
         function focusJob(lat, lon, el) {{
-            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
+            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); if(el) el.classList.add('active');
             if (!lat || !window.leafletMap) return;
             window.leafletMap.flyTo([lat, lon], 15);
             setTimeout(() => {{ window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
@@ -209,7 +219,7 @@ def f_map(df, g):
 </html>
 """
     with open(O1, "w", encoding="utf-8") as f: f.write(html)
-    print(f"Done! Surgery Fix at {O1}")
+    print(f"Done! Final Fix at {O1}")
 
 async def main():
     d, g = f_ld(); s_ids = set(d['id'].astype(str).tolist())

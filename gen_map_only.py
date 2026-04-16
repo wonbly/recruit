@@ -17,8 +17,7 @@ def f_ld():
     if os.path.exists(D1) and os.path.getsize(D1) > 0:
         d = pd.read_csv(D1, encoding='utf-8-sig')
         m_map = {"회사명": "c1", "공고명": "c2", "링크": "c3", "상세주소": "c4", "급여정보": "c5", "예상실수령": "c6", "job_id": "id"}
-        for k, v in m_map.items():
-            if k in d.columns: d = d.rename(columns={k: v})
+        for k, v in d.columns: d = d.rename(columns={k: v})
     g = {}
     if os.path.exists(D2):
         df = pd.read_csv(D2, encoding='utf-8-sig')
@@ -36,7 +35,7 @@ def f_encrypt(data, pw):
 
 def f_map(df, g):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Building Map with Script Surgery - {now}...")
+    print(f"Final Debug - Fixing Loader Hang - {now}...")
     df['c4'] = df['c4'].fillna('')
     if 'id' in df.columns:
         df = df.drop_duplicates(subset=['id'], keep='first')
@@ -45,9 +44,7 @@ def f_map(df, g):
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=11, tiles='CartoDB positron')
     
     for i, (_, r) in enumerate(df.iterrows()):
-        a = str(r["c4"])
-        co = g.get(a)
-        t = r["c2"]; cor = r["c1"]
+        a = str(r["c4"]); co = g.get(a); t = r["c2"]; cor = r["c1"]
         search_data.append({"n": cor, "t": t, "l": co, "s": r["c5"], "a": a, "u": r["c3"]})
         if co:
             col = 'blue' if any(kw in str(t) for kw in ['마케팅', '마케터']) else 'red'
@@ -62,7 +59,7 @@ def f_map(df, g):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Recruit Map | Surgery Fix</title>
+    <title>Recruit Map | Final Fix</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -77,7 +74,7 @@ def f_map(df, g):
         .job-card:hover {{ background: #f8f9fa; }}
         .job-card.active {{ border-color: var(--primary); background: #f1f7fe; }}
         #map-area {{ flex-grow: 1; position: relative; }}
-        #loader {{ display:none; position:absolute; inset:0; background:rgba(255,255,255,0.9); z-index:100; justify-content:center; align-items:center; flex-direction:column; }}
+        #loader {{ position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:100; display:flex; justify-content:center; align-items:center; flex-direction:column; }}
     </style>
 </head>
 <body>
@@ -114,7 +111,6 @@ def f_map(df, g):
             if (decoded.includes('folium')) {{
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('main-layout').style.display = 'flex';
-                document.getElementById('loader').style.display = 'flex';
                 
                 const container = document.getElementById('content');
                 container.innerHTML = decoded;
@@ -122,18 +118,25 @@ def f_map(df, g):
                 const ext = scripts.filter(s => s.src);
                 const inl = scripts.filter(s => !s.src);
 
-                for (let s of ext) {{
-                    await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
-                }}
-                for (let s of inl) {{
-                    const ns = document.createElement('script');
-                    let code = s.textContent;
-                    code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
-                    ns.textContent = code;
-                    document.body.appendChild(ns);
-                }}
-                setTimeout(() => {{ if(window.leafletMap) window.leafletMap.invalidateSize(); renderList(md); }}, 300);
-            }} else {{ alert("Wrong Password"); }}
+                try {{
+                    for (let s of ext) {{
+                        await new Promise(r => {{ const ns = document.createElement('script'); ns.src = s.src; ns.onload = r; ns.onerror = r; document.body.appendChild(ns); }});
+                    }}
+                    for (let s of inl) {{
+                        const ns = document.createElement('script');
+                        let code = s.textContent;
+                        code = code.replace(/var (map_[a-z0-9]+) = L\.map/g, "window.leafletMap = window.$1 = L.map");
+                        ns.textContent = code;
+                        document.body.appendChild(ns);
+                    }}
+                }} catch(e) {{ console.error(e); }}
+
+                setTimeout(() => {{ 
+                    if(window.leafletMap) window.leafletMap.invalidateSize(); 
+                    document.getElementById('loader').style.display = 'none'; // FORCE HIDE
+                    renderList(md); 
+                }}, 800);
+            }} else {{ document.getElementById('err').innerText = "Wrong Password"; }}
         }}
         function renderList(list) {{
             const container = document.getElementById('job-list');
@@ -142,7 +145,6 @@ def f_map(df, g):
                 <div class="job-card" onclick="focusJob(${{j.l?j.l[0]:'null'}},${{j.l?j.l[1]:'null'}},this)">
                     <div style="font-size:0.85rem; font-weight:600; color:#5f6368;">${{j.n}}</div>
                     <div style="font-size:0.95rem; font-weight:500; margin:4px 0;">${{j.t}}</div>
-                    <div style="font-size:0.8rem; color:#999;">💰 ${{j.s || '-'}}</div>
                 </div>
             `).join('');
         }}
@@ -150,14 +152,23 @@ def f_map(df, g):
             const filtered = md.filter(m => m.n.toLowerCase().includes(v.toLowerCase()) || m.t.toLowerCase().includes(v.toLowerCase()));
             renderList(filtered);
             if (window.leafletMap) {{
-                window.leafletMap.eachLayer(l => {{ if (l instanceof L.Marker) {{ const match=filtered.some(f=>f.n===(l.options.name||l.options.title)); if(match) l.addTo(window.leafletMap); else window.leafletMap.removeLayer(l); }} }});
+                window.leafletMap.eachLayer(layer => {{
+                    if (layer instanceof L.Marker) {{
+                        const match = filtered.some(f => f.n === (layer.options.name || layer.options.title));
+                        if (match) layer.addTo(window.leafletMap); else window.leafletMap.removeLayer(layer);
+                    }}
+                }});
             }}
         }}
         function focusJob(lat, lon, el) {{
-            document.querySelectorAll('.job-card').forEach(c => c.classList.remove('active')); el.classList.add('active');
+            const cards = document.querySelectorAll('.job-card');
+            cards.forEach(c => c.classList.remove('active'));
+            if(el) el.classList.add('active');
             if (!lat || !window.leafletMap) return;
             window.leafletMap.flyTo([lat, lon], 15);
-            setTimeout(() => {{ window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }}); }}, 1600);
+            setTimeout(() => {{
+                window.leafletMap.eachLayer(l => {{ if (l.getLatLng && Math.abs(l.getLatLng().lat-lat)<0.005) l.openPopup(); }});
+            }}, 1600);
         }}
     </script>
 </body>
@@ -165,7 +176,7 @@ def f_map(df, g):
 """
     with open(O1, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Done! Surgery Fix at {O1}")
+    print(f"Done! Final Fix Version Created at {O1}")
 
 if __name__ == "__main__":
     d, g = f_ld()
